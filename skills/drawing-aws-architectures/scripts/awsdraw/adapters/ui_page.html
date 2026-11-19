@@ -22,7 +22,7 @@ ul{margin:6px 0 0 18px;padding:0}
 <textarea id="t" placeholder="Ej: Portal web con login, base de datos relacional, colas para correos, archivos e imágenes, WAF…"></textarea>
 <div class="row">
 <input id="f" type="file" multiple accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg,.gif,.webp">
-<label>Modo <select id="m"><option value="offline">Offline (reglas, instantáneo)</option><option value="ai" id="aiopt">Con IA (ANTHROPIC_API_KEY)</option></select></label>
+<label>Modo <select id="m"><option value="offline">Offline (reglas, instantáneo)</option><option value="github" id="opt-github">Con IA · GitHub Models (GITHUB_MODELS_TOKEN)</option><option value="anthropic" id="opt-anthropic">Con IA · Anthropic (ANTHROPIC_API_KEY)</option></select></label>
 <button id="go">Generar arquitectura</button>
 </div>
 <p class="note" id="hint"></p>
@@ -38,8 +38,9 @@ ul{margin:6px 0 0 18px;padding:0}
 </section>
 </main>
 <script>
-const AI=__AI__, $=id=>document.getElementById(id); let last=null;
-if(!AI){$('aiopt').disabled=true;$('hint').textContent='Modo IA desactivado: define ANTHROPIC_API_KEY antes de iniciar la UI. Sin IA no se interpretan imágenes.'}
+const PROV=__PROVIDERS__, $=id=>document.getElementById(id); let last=null;
+for(const k of ['github','anthropic']){if(!PROV.includes(k))$('opt-'+k).disabled=true}
+if(PROV.length){$('m').value=PROV[0]}else{$('hint').textContent='Modo IA desactivado: define GITHUB_MODELS_TOKEN o ANTHROPIC_API_KEY antes de iniciar la UI. Sin IA no se interpretan imágenes.'}
 const b64=f=>new Promise((ok,ko)=>{const r=new FileReader();r.onload=()=>ok(r.result.split(',')[1]);r.onerror=ko;r.readAsDataURL(f)});
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function post(u,b){const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});const j=await r.json();if(!r.ok)throw new Error(j.error||r.status);return j}

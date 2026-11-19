@@ -19,6 +19,7 @@ from awsdraw.adapters import json_spec, svg_preview, web_ui  # noqa: E402
 from awsdraw.adapters.drawio_renderer import DrawioRenderer  # noqa: E402
 from awsdraw.adapters.fs_installer import EXTENSION_ID, FsInstaller  # noqa: E402
 from awsdraw.adapters.llm_anthropic import AnthropicPlanner  # noqa: E402
+from awsdraw.adapters.llm_github import GithubModelsPlanner  # noqa: E402
 from awsdraw.adapters.vscode_opener import VsCodeOpener  # noqa: E402
 from awsdraw.application.use_cases import CollectRequirements, GenerateDiagram, PlanAndGenerate  # noqa: E402
 from awsdraw.domain import catalog, layout  # noqa: E402
@@ -268,6 +269,39 @@ class LlmPlannerTests(unittest.TestCase):
             AnthropicPlanner(api_key="").plan(Requirements("x"))
 
 
+class GithubPlannerTests(unittest.TestCase):
+    SPEC = {"title": "G", "components": [{"id": "a", "service": "users"}, {"id": "b", "service": "s3"}], "flows": [{"from": "a", "to": "b"}]}
+
+    def test_request_shape_and_parsing(self):
+        sent = {}
+
+        def opener(request, timeout):
+            sent["url"] = request.full_url
+            sent["auth"] = request.headers.get("Authorization")
+            sent["body"] = json.loads(request.data)
+            return FakeResponse({"choices": [{"message": {"content": json.dumps(self.SPEC)}}]})
+
+        arch = GithubModelsPlanner(token="tok", opener=opener).plan(Requirements("uc", (("x.png", b"\x89PNG\r\n\x1a\n0000"),)))
+        self.assertEqual([c.id for c in arch.components], ["a", "b"])
+        self.assertEqual(sent["url"], "https://models.github.ai/inference/chat/completions")
+        self.assertEqual(sent["auth"], "Bearer tok")
+        user = sent["body"]["messages"][1]["content"]
+        self.assertEqual([p["type"] for p in user], ["image_url", "text"])
+        self.assertTrue(user[0]["image_url"]["url"].startswith("data:image/png;base64,"))
+        self.assertEqual(sent["body"]["messages"][0]["role"], "system")
+
+    def test_errors_become_spec_errors(self):
+        def limited(request, timeout):
+            raise urllib.error.HTTPError("u", 429, "slow", {}, None)
+
+        with self.assertRaisesRegex(SpecError, "rate limit"):
+            GithubModelsPlanner(token="t", opener=limited).plan(Requirements("x"))
+        with self.assertRaises(SpecError):
+            GithubModelsPlanner(token="t", opener=lambda r, timeout: FakeResponse({"oops": 1})).plan(Requirements("x"))
+        with self.assertRaises(SpecError):
+            GithubModelsPlanner(token="").plan(Requirements("x"))
+
+
 class CollectTests(unittest.TestCase):
     def test_collects_text_and_requires_something(self):
         from awsdraw.adapters.readers import read_document
@@ -305,7 +339,7 @@ class WebUiTests(unittest.TestCase):
             return str(p), False
 
         page = (ROOT / "scripts/awsdraw/adapters/ui_page.html").read_text(encoding="utf-8")
-        cls.server = web_ui.serve(web_ui.UiDeps(analyze, save, False), page, 0)
+        cls.server = web_ui.serve(web_ui.UiDeps(analyze, save, []), page, 0)
         cls.port = cls.server.server_address[1]
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
 
@@ -328,7 +362,7 @@ class WebUiTests(unittest.TestCase):
     def test_serves_page_bound_to_loopback(self):
         status, body = self.call("/")
         self.assertEqual(status, 200)
-        self.assertIn(b"const AI=false", body)
+        self.assertIn(b"const PROV=[]", body)
         self.assertEqual(self.server.server_address[0], "127.0.0.1")
 
     def test_generate_from_text_and_file(self):

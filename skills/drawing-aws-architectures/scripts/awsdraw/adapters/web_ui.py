@@ -26,7 +26,7 @@ ALLOWED_SUFFIXES = {".txt", ".md", ".docx", ".pdf", ".png", ".jpg", ".jpeg", ".g
 class UiDeps:
     analyze: Callable[[str, list[str], str], dict]  # (text, file paths, mode) -> response dict
     save: Callable[[str, str], tuple[str, bool]]  # (xml, filename) -> (path, opened)
-    ai_available: bool
+    providers: list  # enabled AI providers, e.g. ["github", "anthropic"]
 
 
 def _safe_name(name: str, fallback: str) -> str:
@@ -66,7 +66,7 @@ def make_handler(deps: UiDeps, page: str, port_getter: Callable[[], int]):
             if not self._origin_ok():
                 return self._json(403, {"error": "Forbidden host"})
             if self.path in ("/", "/index.html"):
-                return self._send(200, page.replace("__AI__", "true" if deps.ai_available else "false").encode(), "text/html; charset=utf-8")
+                return self._send(200, page.replace("__PROVIDERS__", json.dumps(deps.providers)).encode(), "text/html; charset=utf-8")
             self._json(404, {"error": "Not found"})
 
         def do_POST(self):  # noqa: N802
@@ -104,7 +104,9 @@ def make_handler(deps: UiDeps, page: str, port_getter: Callable[[], int]):
                     target = Path(tmp) / f"{i}_{name}"
                     target.write_bytes(base64.b64decode(str(f.get("data", "")), validate=True))
                     paths.append(str(target))
-                mode = "ai" if data.get("mode") == "ai" else "offline"
+                mode = str(data.get("mode") or "offline")
+                if mode not in ("offline", "github", "anthropic"):
+                    raise SpecError("Unknown mode.")
                 return deps.analyze(str(data.get("text", ""))[:50000], paths, mode)
 
     return Handler

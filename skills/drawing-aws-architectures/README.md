@@ -46,7 +46,7 @@ Esta skill le enseña al agente un flujo corto: leer requisitos → escribir un 
 | Extensión **Draw.io Integration** (`hediet.vscode-drawio`) | Ver y editar `.drawio` dentro de VS Code (incluye draw.io sin conexión) | Sí |
 | Comando `code` en el PATH | Opción `--open` y botón "Abrir en VS Code" | Recomendado |
 | Agente con soporte de skills (Copilot agent mode, Claude Code) | Usarla en lenguaje natural | Opcional |
-| `ANTHROPIC_API_KEY` | Modo IA de la interfaz web (lee imágenes) | Opcional |
+| `GITHUB_MODELS_TOKEN` o `ANTHROPIC_API_KEY` | Modo IA de la interfaz web (lee imágenes) | Opcional |
 | `pdftotext`/`pdftoppm` (poppler) o `pip install pypdf` | Leer PDF (texto / escaneados) | Opcional |
 
 Comando `code` en Windows/macOS: Paleta de comandos (`Ctrl+Shift+P`) → **Shell Command: Install 'code' command in PATH** (en Windows suele quedar instalado por defecto).
@@ -122,14 +122,26 @@ Opciones: `--port 8765`, `--output-dir diagrams`, `--browser`.
 | Modo | Necesita | Lee | Privacidad |
 |---|---|---|---|
 | Offline | nada | texto, PDF, Word | Nada sale de tu equipo |
-| Con IA | `ANTHROPIC_API_KEY` | lo anterior + PNG/JPG/GIF/WebP | El caso de uso se envía a la API de Anthropic. Si la llamada falla, cae al modo offline |
+| Con IA · **GitHub Models** | `GITHUB_MODELS_TOKEN` (token de GitHub con permiso *Models: read*) | lo anterior + PNG/JPG/GIF/WebP | El caso de uso se envía a GitHub Models. No requiere pagar Anthropic |
+| Con IA · Anthropic | `ANTHROPIC_API_KEY` | lo anterior + imágenes | El caso de uso se envía a la API de Anthropic (se factura aparte) |
 
-Definir la clave en Windows PowerShell antes de iniciar la UI:
+Si falla la llamada a un modo con IA, la interfaz cae al modo offline y te avisa. Las opciones no configuradas aparecen deshabilitadas.
+
+> **Importante:** GitHub Models es un servicio aparte de Copilot, con sus propios límites de uso por cuenta (el error 429 indica límite alcanzado). No consume la cuota de Copilot Chat. Si quieres usar exactamente tu cuota de Copilot, usa el agente de VS Code (sección 4.1) con las imágenes adjuntas.
+
+**Crear el token de GitHub Models**
+1. GitHub → Settings → Developer settings → Personal access tokens → *Fine-grained tokens* → Generate new token.
+2. Concede el permiso de cuenta **Models** en modo lectura (*models: read*). No necesita acceso a repositorios.
+3. Cópialo y defínelo antes de iniciar la UI.
+
+PowerShell:
 ```powershell
-$env:ANTHROPIC_API_KEY="sk-ant-..."
+$env:GITHUB_MODELS_TOKEN="github_pat_..."
 python scripts/run.py ui --browser
 ```
-En macOS/Linux: `export ANTHROPIC_API_KEY=sk-ant-...`. Opcional: `ANTHROPIC_MODEL` para cambiar el modelo (por defecto `claude-sonnet-5-5`).
+En macOS/Linux: `export GITHUB_MODELS_TOKEN=github_pat_...`. Opcional: `GITHUB_MODELS_MODEL` (por defecto `openai/gpt-4.1`; debe aceptar imágenes). También se acepta `GITHUB_TOKEN` si tiene ese permiso.
+
+Para Anthropic: `$env:ANTHROPIC_API_KEY="sk-ant-..."` (opcional `ANTHROPIC_MODEL`, por defecto `claude-sonnet-5-5`). Nunca subas tokens a un repositorio.
 
 La vista previa es simplificada (cuadros de colores). El archivo `.drawio` sí trae los íconos oficiales.
 
@@ -215,9 +227,9 @@ Con errores no se genera archivo; con avisos sí.
 
 **Offline** (`domain/planner.py`): reglas por palabras clave en español e inglés. Por ejemplo, "login" activa Cognito; "relacional/SQL" activa Aurora; "colas/asíncrono" activa SQS + un worker; "contenedores/microservicios" cambia API Gateway + Lambda por ALB + Fargate dentro de una VPC; "analítica/BI" añade Glue + Athena + QuickSight; "IA/chatbot/RAG" añade Bedrock. Si no reconoce nada, genera una base serverless (API Gateway → Lambda → DynamoDB). Es instantáneo y gratis, pero es una heurística: revisa y ajusta el resultado.
 
-**Con IA** (`adapters/llm_anthropic.py`): el modelo solo elige servicios y flujos **del catálogo** y devuelve JSON; el dibujo sigue siendo determinista. Se valida igual que cualquier spec; si falla, se usa el planificador offline.
+**Con IA** (`adapters/llm_github.py` y `adapters/llm_anthropic.py`): el modelo solo elige servicios y flujos **del catálogo** y devuelve JSON; el dibujo sigue siendo determinista. Se valida igual que cualquier spec; si falla, se usa el planificador offline.
 
-Cuando trabajas con un agente (Copilot/Claude Code), el propio agente actúa como "planificador" escribiendo el spec, así que no necesitas la API key.
+Cuando trabajas con un agente (Copilot/Claude Code), el propio agente actúa como "planificador" escribiendo el spec, así que no necesitas ninguna clave.
 
 ## 11. Arquitectura del código (clean architecture)
 
@@ -243,7 +255,7 @@ Regla de dependencia: `domain` no importa nada de `application` ni `adapters`; `
 - Los archivos del usuario se tratan como **datos no confiables**: `.docx` se lee con tope de tamaño, sin extraer a disco y rechazando XML con `DOCTYPE`/`ENTITY`; las imágenes se validan por su firma; los PDF se leen con rutas absolutas.
 - La interfaz escucha **solo en 127.0.0.1**, valida `Host` y `Origin` (anti DNS-rebinding/CSRF), acepta solo JSON, limita el cuerpo a 40 MB, guarda las subidas en una carpeta temporal con nombres saneados (se borra tras cada petición) y solo escribe dentro de `--output-dir`.
 - El texto del caso de uso se envía al modelo como **datos**, con instrucción explícita de no obedecerlo.
-- La clave de API se lee de la variable de entorno; nunca se guarda en disco.
+- Las claves/tokens se leen de variables de entorno; nunca se guardan en disco.
 
 ## 13. Pruebas
 
@@ -251,7 +263,7 @@ Regla de dependencia: `domain` no importa nada de `application` ni `adapters`; `
 python -m unittest discover -s tests
 ```
 
-41 pruebas: catálogo contra la biblioteca real de draw.io, reglas, que los nodos no se solapen, que la caja VPC contenga solo nodos VPC, XML bien formado con ids únicos y aristas válidas, escapado de caracteres, planificador, planificador IA con respuesta simulada, servidor web (Host/Origin, subidas, guardado), instalador, regla de dependencias y revisión de `SKILL.md`. También hay una prueba de presupuesto de tiempo (<1 s).
+43 pruebas: catálogo contra la biblioteca real de draw.io, reglas, que los nodos no se solapen, que la caja VPC contenga solo nodos VPC, XML bien formado con ids únicos y aristas válidas, escapado de caracteres, planificador, planificadores IA (Anthropic y GitHub Models) con respuestas simuladas, servidor web (Host/Origin, subidas, guardado), instalador, regla de dependencias y revisión de `SKILL.md`. También hay una prueba de presupuesto de tiempo (<1 s).
 
 ## 14. Solución de problemas
 
@@ -260,7 +272,9 @@ python -m unittest discover -s tests
 | El `.drawio` abre como texto | Falta la extensión Draw.io Integration; instálala y reabre el archivo |
 | `--open` no abre nada | El comando `code` no está en el PATH (ver sección 2) |
 | `error: AWS002 unknown service` | Revisa la sugerencia del mensaje o ejecuta `catalog` |
-| "Images need the AI mode" | Offline no interpreta imágenes: usa modo IA o describe la imagen en texto |
+| "Images need an AI mode" | Offline no interpreta imágenes: configura `GITHUB_MODELS_TOKEN` o `ANTHROPIC_API_KEY`, o describe la imagen en texto |
+| HTTP 401/403 en modo GitHub | El token no tiene el permiso *Models: read* o expiró |
+| HTTP 429 | Límite de GitHub Models alcanzado: espera o usa otro modo |
 | PDF escaneado sin texto | Instala poppler (`pdftoppm`) y usa modo IA, o pasa las páginas como imágenes |
 | La skill no aparece en Copilot | Recarga la ventana; confirma que la carpeta está en `.github/skills/<nombre>/SKILL.md` |
 | El puerto 8765 está ocupado | `python scripts/run.py ui --port 8800` |

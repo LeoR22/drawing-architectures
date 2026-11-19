@@ -13,6 +13,7 @@ from .adapters.drawio_renderer import DrawioRenderer
 from .adapters.fs_installer import EXTENSION_ID, FsInstaller
 from .adapters.fs_writer import FsWriter
 from .adapters.llm_anthropic import AnthropicPlanner
+from .adapters.llm_github import GithubModelsPlanner
 from .adapters.vscode_opener import VsCodeOpener
 from .application.use_cases import CollectRequirements, GenerateDiagram, PlanAndGenerate, SaveDiagram
 from .domain import catalog
@@ -85,7 +86,9 @@ def cmd_install(args) -> int:
 def cmd_ui(args) -> int:
     from .adapters import web_ui
 
-    rule, ai = RulePlanner(), AnthropicPlanner()
+    rule = RulePlanner()
+    providers = {"github": GithubModelsPlanner, "anthropic": AnthropicPlanner}
+    enabled = [k for k, cls in providers.items() if cls.available()]
     generate = GenerateDiagram(DrawioRenderer())
     collect = CollectRequirements(readers.read_document)
     out_dir = Path(args.output_dir).resolve()
@@ -95,12 +98,14 @@ def cmd_ui(args) -> int:
         started = time.perf_counter()
         req, warnings = collect(text, paths)
         used = "offline"
-        if mode == "ai" and AnthropicPlanner.available():
-            result = PlanAndGenerate(ai, generate, fallback=rule)(req)
-            used = "ai"
+        if mode in enabled:
+            result = PlanAndGenerate(providers[mode](), generate, fallback=rule)(req)
+            used = mode
         else:
+            if mode in providers:
+                warnings.append(f"Mode '{mode}' is not configured (see reference/ui.md); used offline rules instead.")
             if req.images and not req.text.strip():
-                raise SpecError("Images need the AI mode (set ANTHROPIC_API_KEY). Offline mode reads text, PDF and Word only.")
+                raise SpecError("Images need an AI mode: set GITHUB_MODELS_TOKEN or ANTHROPIC_API_KEY, or describe the images in text.")
             if req.images:
                 warnings.append("Offline mode ignores images; only the text was used.")
             result = PlanAndGenerate(rule, generate)(Requirements(req.text))
@@ -123,7 +128,7 @@ def cmd_ui(args) -> int:
         return saved, opener.open(saved)
 
     page = (Path(__file__).parent / "adapters" / "ui_page.html").read_text(encoding="utf-8")
-    server = web_ui.serve(web_ui.UiDeps(analyze, save, AnthropicPlanner.available()), page, args.port)
+    server = web_ui.serve(web_ui.UiDeps(analyze, save, enabled), page, args.port)
     url = f"http://127.0.0.1:{server.server_address[1]}/"
     print(f"UI running at {url}  (Ctrl+C to stop). Diagrams are saved to {out_dir}")
     if args.browser:
