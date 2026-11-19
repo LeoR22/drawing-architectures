@@ -20,4 +20,4 @@ Each pattern has a ready spec in `examples/`. Adapt labels and add or remove com
 
 ## Keep it high level
 
-6-14 components. Group repeated pieces (one "Microservices (Fargate)" box, not eight). Show data flow left to right: actors, edge, application, data, operations.
+6-20 components (more is fine when the case needs it; AWS sets no limit). Group repeated pieces (one "Microservices (Fargate)" box, not eight). Show data flow left to right: actors, edge, application, data, operations.

@@ -26,7 +26,7 @@ Copy this checklist and tick it off:
 ```
 python SKILL_DIR/scripts/run.py generate architecture.json -o architecture.drawio --open
 ```
-Errors name the problem (for example `AWS002` unknown service, with suggestions). Fix the spec and rerun once. Warnings (`AWS005`, `AWS006`) are advisory.
+Errors name the problem (for example `AWS002` unknown service, with suggestions). Fix the spec and rerun once. Warnings (`AWS005`, `AWS006`) are advisory: there is no hard service limit (error only above 40). The result also lists *ideas to complete it* (WAF, monitoring, backups, guardrails...) as text; offer them to the user instead of adding services unasked.
 
 **4. Deliver.** Tell the user where the file is, that tab 1 gives the vendor-neutral overview and tab 2 is the one to present to non-technical people (its numbered story explains the system in plain words), that it opens with the **Draw.io Integration** extension (`hediet.vscode-drawio`), and list the assumptions in at most 3 bullets. Do not paste the XML.
 

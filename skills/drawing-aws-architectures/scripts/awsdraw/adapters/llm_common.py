@@ -17,7 +17,7 @@ MAX_IMAGES = 5
 SYSTEM = """You design HIGH-LEVEL AWS architectures. Reply with ONE JSON object and nothing else.
 Schema: {"title": str, "multi_az": bool, "profile": "agents"|null, "components": [{"id": str, "service": str, "label": str, "vpc": bool, "role": str|null}],
 "flows": [{"from": id, "to": id, "label": str, "async": bool}]}.
-Rules: use only these service keys: %s. Start with an actor (users|mobile|client). 6-14 components, every
+Rules: use only these service keys: %s. Start with an actor (users|mobile|client). 6-20 components (more only if the case really needs it), every
 component except monitoring/security ones must appear in a flow. Set vpc=true only for services that
 must live inside a VPC (containers, caches, relational DBs on EC2/RDS). Prefer managed/serverless services.
 Cover security (WAF/Cognito/KMS) and observability (CloudWatch) when the requirements imply them.

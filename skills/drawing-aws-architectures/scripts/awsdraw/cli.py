@@ -17,7 +17,7 @@ from .adapters.llm_github import GithubModelsPlanner
 from .adapters.ui_response import to_response
 from .adapters.vscode_opener import VsCodeOpener
 from .application.use_cases import CollectRequirements, GenerateDiagram, PlanAndGenerate, SaveDiagram
-from .domain import catalog
+from .domain import catalog, suggestions
 from .domain.errors import SpecError
 from .domain.models import Requirements
 from .domain.planner import RulePlanner
@@ -31,6 +31,11 @@ def _report(result, path: str, opened: bool, started: float) -> None:
     print(f"Wrote {path}  ({len(arch.components)} components, {len(arch.flows)} flows, {time.perf_counter() - started:.2f}s)")
     for f in result.findings:
         print(f"  {f.severity.upper()} {f.code}: {f.message}")
+    tips = suggestions.suggest(arch)
+    if tips:
+        print("Ideas para completarla:")
+        for tip in tips:
+            print(f"  - {tip}")
     print("Opened in VS Code." if opened else f"Open it in VS Code (extension {EXTENSION_ID}): code \"{path}\"")
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 
 from ..application.use_cases import DiagramResult
-from ..domain import agents, c4, overview, overview_layout
+from ..domain import agents, c4, overview, overview_layout, suggestions
 from . import svg_preview
 
 
@@ -22,5 +22,6 @@ def to_response(result: DiagramResult, used: str, warnings: list[str], started: 
         "c4_containers_svg": svg_preview.render_c4(c4.containers(arch, result.layout)),
         "components": [{"id": c.id, "service": c.service, "label": c.label} for c in arch.components],
         "warnings": warnings + [f"{f.code}: {f.message}" for f in result.findings],
+        "suggestions": suggestions.suggest(arch),
         "seconds": round(time.perf_counter() - started, 2),
     }

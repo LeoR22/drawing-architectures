@@ -235,9 +235,21 @@ class RuleTests(unittest.TestCase):
         msg = [f.message for f in validate(Architecture("t", (Component("a", "dynamodbb"),), ()))][0]
         self.assertIn("dynamodb", msg)
 
-    def test_too_many_components(self):
-        comps = tuple(Component(f"c{i}", "lambda") for i in range(21))
-        self.assertIn("AWS005", codes(Architecture("t", comps, ())))
+    def test_many_components_only_warn_until_the_sanity_cap(self):
+        comps = tuple(Component(f"c{i}", "lambda") for i in range(25))
+        findings = [f for f in validate(Architecture("t", comps, ())) if f.code == "AWS005"]
+        self.assertEqual([f.severity for f in findings], ["warning"])
+        huge = tuple(Component(f"c{i}", "lambda") for i in range(41))
+        self.assertEqual([f.severity for f in validate(Architecture("t", huge, ())) if f.code == "AWS005"], ["error"])
+
+    def test_suggestions_name_what_is_missing(self):
+        from awsdraw.domain import suggestions
+        arch = Architecture("t", (Component("u", "users"), Component("cdn", "cloudfront"), Component("api", "api_gateway"), Component("fn", "lambda"), Component("db", "aurora")), (Flow("u", "cdn"), Flow("cdn", "api"), Flow("api", "fn"), Flow("fn", "db")))
+        text = " ".join(suggestions.suggest(arch))
+        for word in ("WAF", "CloudWatch", "KMS", "Backup", "multi_az"):
+            self.assertIn(word, text)
+        full = RulePlanner().plan(Requirements("Tienda web con pagos, login y monitoreo", ()))
+        self.assertNotIn("Cognito", " ".join(suggestions.suggest(full)))
 
     def test_orphan_warning_but_ops_exempt(self):
         arch = Architecture("t", (Component("a", "users"), Component("b", "lambda"), Component("c", "s3"), Component("m", "cloudwatch")), (Flow("a", "b"),))

@@ -35,7 +35,7 @@ ul{margin:6px 0 0 18px;padding:0}
 <h3 style="margin:14px 0 4px">Nivel 2 · Visión general (para explicarlo)</h3><div id="overview"></div><div class="row imgs" data-k="overview"><button class="alt" data-f="png">Descargar PNG</button><button class="alt" data-f="svg">Descargar SVG</button></div>
 <h3 style="margin:14px 0 4px">C4 · Nivel 1 · Contexto del sistema</h3><div id="c4a"></div><div class="row imgs" data-k="c4a"><button class="alt" data-f="png">Descargar PNG</button><button class="alt" data-f="svg">Descargar SVG</button></div><h3 style="margin:14px 0 4px">C4 · Nivel 2 · Contenedores</h3><div id="c4b"></div><div class="row imgs" data-k="c4b"><button class="alt" data-f="png">Descargar PNG</button><button class="alt" data-f="svg">Descargar SVG</button></div><details><summary>Niveles 3 y 4 · vista previa técnica</summary><div id="preview"></div><div class="row imgs" data-k="preview"><button class="alt" data-f="png">Descargar PNG</button><button class="alt" data-f="svg">Descargar SVG</button></div><p class="note">Vista previa simplificada. El archivo <code>.drawio</code> trae los 4 niveles como pestañas, con los íconos oficiales de AWS.</p></details>
 <div class="row"><button id="dl" class="alt">Descargar .drawio</button><button id="dlall" class="alt">Descargar todas las imágenes (PNG)</button><button id="sv">Guardar y abrir en VS Code</button><span id="sres" class="note"></span></div>
-<div id="warns"></div>
+<div id="warns"></div><details open><summary>Ideas para completar la arquitectura</summary><ul id="tips"></ul><p class="note">Sugerencias basadas en los pilares de AWS Well-Architected; no se agregan solas al diagrama.</p></details>
 <details><summary>Componentes (lista)</summary><ul id="comps"></ul></details>
 </section>
 </main>
@@ -129,7 +129,7 @@ $('go').onclick=async()=>{
   $('meta').textContent=`${j.components.length} componentes · planner: ${j.planner} · ${((performance.now()-t0)/1000).toFixed(1)} s`;
   $('system').innerHTML=j.system_svg;$('overview').innerHTML=j.overview_svg;$('preview').innerHTML=j.svg;$('c4a').innerHTML=j.c4_context_svg;$('c4b').innerHTML=j.c4_containers_svg;$('sres').textContent='';
   $('warns').innerHTML=j.warnings.map(w=>`<p class="warn">⚠ ${esc(w)}</p>`).join('');
-  $('comps').innerHTML=j.components.map(c=>`<li><b>${esc(c.label)}</b> <span class="note">(${esc(c.service)})</span></li>`).join('');
+  $('tips').innerHTML=(j.suggestions||[]).map(t=>`<li>${esc(t)}</li>`).join('');$('comps').innerHTML=j.components.map(c=>`<li><b>${esc(c.label)}</b> <span class="note">(${esc(c.service)})</span></li>`).join('');
  }catch(e){$('msg').innerHTML=`<span class="err">${esc(e.message)}</span>`}
  $('go').disabled=false};
 $('dl').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([last.xml],{type:'application/xml'}));a.download=last.filename;a.click()};

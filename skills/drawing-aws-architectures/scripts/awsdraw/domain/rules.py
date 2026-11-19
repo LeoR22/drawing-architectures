@@ -5,8 +5,8 @@ from __future__ import annotations
 from . import catalog
 from .models import TIERS, Architecture, Finding
 
-MAX_COMPONENTS = 20
-SOFT_LIMIT = 16
+MAX_COMPONENTS = 40  # sanity cap only: AWS sets no limit, the layout stays readable up to here
+SOFT_LIMIT = 20
 
 
 def validate(arch: Architecture) -> list[Finding]:
@@ -38,9 +38,9 @@ def validate(arch: Architecture) -> list[Finding]:
         touched.update((f.source, f.target))
 
     if len(arch.components) > MAX_COMPONENTS:
-        err("AWS005", f"{len(arch.components)} components is too many for a high-level view (max {MAX_COMPONENTS}); group related services.")
+        err("AWS005", f"{len(arch.components)} components is more than the {MAX_COMPONENTS} this tool can lay out; split the solution into two diagrams.")
     elif len(arch.components) > SOFT_LIMIT:
-        warn("AWS005", f"{len(arch.components)} components; high-level diagrams read best with {SOFT_LIMIT} or fewer.")
+        warn("AWS005", f"{len(arch.components)} components: it is a large solution. Levels 1 and 2 stay simple; the detail lives in levels 3-4 (you may also split it into two diagrams).")
 
     for comp in arch.components:
         svc = catalog.lookup(comp.service)

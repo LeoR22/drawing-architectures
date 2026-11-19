@@ -278,7 +278,7 @@ Actores | Edge | Aplicación | Datos | Operaciones
 | AWS002 | error | servicio desconocido (con sugerencias) |
 | AWS003 | error | un flujo apunta a un id inexistente |
 | AWS004 | error | no hay componentes |
-| AWS005 | error / aviso | demasiados componentes (>20 error, >16 aviso); agrupa servicios |
+| AWS005 | aviso / error | solución grande: aviso desde 21 componentes (no bloquea; AWS no fija un límite y recomienda separar alto nivel y detalle); error solo sobre 40 |
 | AWS006 | aviso | componente sin flujos (los de `ops` están exentos) |
 | AWS007 | error | `tier` inválido |
 | AWS008 | error | flujo de un componente a sí mismo |
