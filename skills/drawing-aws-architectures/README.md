@@ -217,6 +217,24 @@ Ejecuta `python scripts/run.py catalog` para verlo completo. Resumen por columna
 
 Cada entrada apunta a un ícono de la biblioteca **oficial** `Sidebar-AWS4.js` de draw.io. Un test comprueba que todos existan (fixture en `tests/fixtures/aws4-icons.txt`), así no salen cuadros vacíos. Si pides un servicio desconocido, el error sugiere los más parecidos (por ejemplo `dynamodbb` → `dynamodb`).
 
+### Tipos de casos de uso que entiende
+
+El modo sin IA reconoce **familias** de soluciones y enciende lo que casi siempre necesitan (puedes combinarlas en un mismo texto). Con IA (GitHub Models o Anthropic) cualquier caso nuevo se resuelve igual, usando el catálogo de servicios.
+
+| Familia | Palabras que activan | Qué agrega |
+|---|---|---|
+| **E-commerce** (tienda, marketplace, suscripciones, pagos) | tienda, carrito, checkout, pedidos, inventario, marketplace, suscripción | Login, base SQL de pedidos, archivos de productos, colas, avisos, WAF; búsqueda y caché en marketplace o alto tráfico; eventos si hay varios vendedores |
+| **Agentes** de cualquier tipo | agente, MCP, chatbot, asistente, RAG, LLM | Vista de agentes en el nivel 1 + memoria + herramientas. Variantes: **soporte** (APIs de negocio), **voz** (Transcribe/Polly), **analista de datos** (consulta SQL), **multi-agente** (especialistas), **código** (entorno seguro), **automatización** (flujo de trabajo), **correo** (SES) |
+| IoT / series de tiempo | sensores, IoT, telemetría | Dispositivos conectados, streaming, lago de datos, Timestream |
+| Video y multimedia | video, podcast, VOD | Conversión de video, CDN, archivos |
+| Documentos / OCR | factura, OCR, contrato, PDF | Lectura de documentos (Textract) + cola |
+| Mapas y logística | GPS, domicilios, rastreo | Location Service |
+| Redes y fraude | grafo, red social, fraude | Base de relaciones (Neptune) |
+| Chat y tiempo real | chat, colaborativo, multijugador | API en tiempo real (AppSync) |
+| Salud, banca, seguros | clínica, banco, fintech, seguro | Auditoría, cifrado, login, WAF |
+| SaaS multi-tenant | SaaS, B2B, multi-tenant | Login, base SQL, caché |
+| Marketing / recomendaciones | campaña, newsletter, recomendaciones | Pinpoint, Personalize |
+
 ## 8. Los 4 niveles del diagrama
 
 El archivo `.drawio` trae **seis pestañas**: cuatro niveles de lo más general a lo más técnico, más el **modelo C4** (pestañas 5 y 6: *Contexto* con personas, sistema y sistemas externos; y *Contenedores* con las piezas dentro del límite del sistema y su tecnología). También salen en la interfaz con descarga PNG/SVG. La idea: entender primero el entorno de la solución, sin nombres de servicios, y bajar de nivel solo cuando haga falta.

@@ -182,6 +182,44 @@ class C4Tests(unittest.TestCase):
             ET.fromstring(svg_preview.render_c4(v))
 
 
+class UseCaseFamilyTests(unittest.TestCase):
+    """Any kind of use case must produce a valid, renderable architecture (all 6 tabs)."""
+
+    CASES = {
+        "Tienda en línea de ropa con carrito, pagos y recomendaciones": ("cognito", "aurora", "personalize"),
+        "Marketplace multi-vendedor con pedidos e inventario": ("eventbridge", "opensearch"),
+        "Suscripciones SaaS B2B multi-tenant": ("cognito", "aurora"),
+        "Agente de soporte al cliente con RAG y acceso a pedidos": ("bedrock", "opensearch"),
+        "Sistema multi-agente supervisor con agentes especialistas": ("bedrock",),
+        "Agente de voz para call center": ("transcribe", "polly"),
+        "Agente analista de datos text-to-sql": ("athena",),
+        "Agente de código con sandbox y pull requests": ("fargate",),
+        "Agente de correo que automatiza respuestas": ("ses", "step_functions"),
+        "Plataforma IoT de sensores con series de tiempo y dashboards": ("iot_core", "timestream"),
+        "Plataforma de video bajo demanda": ("mediaconvert", "cloudfront"),
+        "Digitalización de facturas con OCR": ("textract",),
+        "App de domicilios con rastreo GPS y mapa": ("location_service",),
+        "Red social con grafo de amigos": ("neptune",),
+        "Historia clínica de pacientes con auditoría": ("cloudtrail", "kms"),
+        "Chat en tiempo real colaborativo": ("appsync",),
+    }
+
+    def test_families_get_their_services_and_render(self):
+        for text, expected in self.CASES.items():
+            with self.subTest(text):
+                arch = RulePlanner().plan(Requirements(text, ()))
+                services = {c.service for c in arch.components}
+                for svc in expected:
+                    self.assertIn(svc, services)
+                self.assertEqual([f.code for f in validate(arch) if f.severity == "error"], [])
+                xml = DrawioRenderer().render(arch, layout.compute(arch))
+                self.assertEqual(len(ET.fromstring(xml).findall("diagram")), 6)
+
+    def test_agent_flavours_are_agentic_and_shop_is_not(self):
+        for text in self.CASES:
+            self.assertEqual(agents.is_agentic(RulePlanner().plan(Requirements(text, ()))), text.startswith(("Agente", "Sistema multi-agente")), text)
+
+
 class RuleTests(unittest.TestCase):
     def base(self, **kw):
         return Architecture("t", (Component("a", "users"), Component("b", "lambda")), (Flow("a", "b"),), **kw)

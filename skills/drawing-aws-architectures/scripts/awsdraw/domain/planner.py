@@ -55,6 +55,49 @@ class RulePlanner:
         secrets = _has(t, r"secreto", r"secret", r"credencial", r"credential", r"api key")
         global_users = _has(t, r"global", r"multi.?region", r"internacional", r"worldwide", r"latencia global")
 
+        # --- families of use cases: each one switches on what that kind of solution almost always needs ---
+        ecommerce = _has(t, r"e-?commerce", r"tienda", r"comercio electronic", r"carrito", r"checkout", r"marketplace", r"catalogo de producto", r"\bpedidos?\b", r"inventario", r"shopify", r"retail", r"suscripcion", r"subscription", r"\bpagos?\b", r"payment", r"venta en linea", r"online store")
+        iot = _has(t, r"\biot\b", r"sensor", r"dispositivos conectados", r"telemetr", r"smart ?(home|city)", r"flota")
+        media = _has(t, r"video", r"streaming de (video|audio)", r"\bvod\b", r"podcast", r"transcodific", r"multimedia")
+        voice = _has(t, r"\bvoz\b", r"voice", r"llamada", r"call ?center", r"contact center", r"speech", r"audio", r"ivr")
+        docs = _has(t, r"\bocr\b", r"factura", r"invoice", r"formulario", r"extraer datos de", r"digitaliz", r"escane", r"contrato", r"pdf")
+        geo = _has(t, r"geolocaliz", r"\bgps\b", r"mapa", r"ruta", r"delivery", r"domicilio", r"logistic", r"rastreo", r"tracking")
+        graph = _has(t, r"grafo", r"graph", r"red social", r"social network", r"relaciones entre", r"deteccion de fraude", r"fraud")
+        timeseries = _has(t, r"serie.? de tiempo", r"time.?series", r"metricas historic", r"telemetr")
+        emailing = _has(t, r"email marketing", r"campana", r"campaign", r"newsletter", r"correos masivos", r"marketing")
+        recsys = _has(t, r"recomendaci", r"recommend", r"personaliz")
+        realtime = _has(t, r"chat\b", r"tiempo real", r"websocket", r"colaborativ", r"multijugador", r"multiplayer", r"juego", r"gaming")
+        saas = _has(t, r"saas", r"multi.?tenant", r"multi.?inquilino", r"b2b", r"plataforma para clientes")
+        regulated = _has(t, r"salud", r"health", r"hipaa", r"clinic", r"paciente", r"banco", r"bank", r"fintech", r"credito", r"seguro", r"insurance", r"gobierno", r"government")
+        # agent flavours
+        a_voice = voice
+        a_sql = _has(t, r"text.?to.?sql", r"consulta(r)? .*base de datos en lenguaje natural", r"analista de datos", r"data analyst", r"sql agent", r"preguntas sobre (los )?datos")
+        a_multi = _has(t, r"multi.?agente", r"multi.?agent", r"varios agentes", r"orquestador de agentes", r"supervisor")
+        a_code = _has(t, r"codigo", r"coding", r"programa", r"developer agent", r"devops", r"pull request", r"sandbox")
+        a_auto = _has(t, r"automatiza", r"automation", r"\brpa\b", r"flujo", r"tareas repetitivas", r"navega(r|dor)", r"browser")
+        a_mail = _has(t, r"correo", r"email", r"bandeja", r"inbox")
+        a_support = _has(t, r"soporte", r"support", r"servicio al cliente", r"customer service", r"mesa de ayuda", r"helpdesk", r"\bpqr\b")
+        if ecommerce and not agent:
+            web = web or not mobile
+            auth = relational = files = queue = notify = security = monitor = True
+            search = search or _has(t, r"marketplace", r"catalogo", r"busca")
+            cache = cache or _has(t, r"alto trafico", r"black friday", r"cyber", r"millones", r"marketplace")
+            events = events or _has(t, r"marketplace", r"multi.?vendedor", r"vendedores")
+        if iot:
+            streaming = True
+        if media:
+            files = web = True
+        if docs:
+            files = queue = True
+        if regulated:
+            audit = security = auth = True
+        if saas:
+            auth = relational = cache = True
+        chat = _has(t, r"chat\b", r"websocket", r"colaborativ", r"multijugador", r"multiplayer") and not iot
+        if chat:
+            streaming = False
+            nosql = True
+
         comps: list[Component] = []
         flows: list[Flow] = []
         add = lambda cid, svc, label="", **kw: comps.append(Component(cid, svc, label or cid, **kw))  # noqa: E731
@@ -97,7 +140,7 @@ class RulePlanner:
                     add("auth", "cognito", "Cognito")
                     link("compute", "auth", "valida identidad")
             else:
-                add("api", "api_gateway", "API Gateway")
+                add("api", "appsync" if chat else "api_gateway", "API en tiempo real (AppSync)" if chat else "API Gateway")
                 add("compute", "lambda", "Lógica del negocio (Lambda)")
                 link(entry_from, "api", "REST/HTTPS")
                 link("api", "compute")
@@ -154,10 +197,64 @@ class RulePlanner:
                 add("ml", "sagemaker", "Modelo de ML (SageMaker)")
                 link(backend, "ml", "predice")
 
+            if agent:
+                if a_voice:
+                    add("stt", "transcribe", "Voz a texto (Transcribe)", role="tool_service")
+                    add("tts", "polly", "Texto a voz (Polly)", role="tool_service")
+                    link(backend, "stt", "escucha")
+                    link(backend, "tts", "habla")
+                if a_sql:
+                    add("sqltool", "athena", "Consulta de datos (Athena)", role="tool_database")
+                    link(backend, "sqltool", "consulta datos")
+                if a_multi:
+                    add("sub", "lambda", "Agentes especialistas (Lambda)", role="tool_service")
+                    link(backend, "sub", "delega tareas")
+                if a_code:
+                    add("sandbox", "fargate", "Entorno seguro de ejecución (Fargate)", role="tool_service", vpc=True)
+                    link(backend, "sandbox", "ejecuta código")
+                if a_auto and not workflow:
+                    add("flow", "step_functions", "Flujo de trabajo (Step Functions)", role="tool_service")
+                    link(backend, "flow", "ejecuta pasos")
+                if a_mail:
+                    add("mail", "ses", "Correo (SES)", role="tool_api")
+                    link(backend, "mail", "lee y envía correos")
+                if a_support or ecommerce:
+                    add("crm", "api_gateway", "APIs de negocio (pedidos, clientes)", role="tool_api")
+                    link("tools", "crm", "consulta sistemas") if "tools" in {c.id for c in comps} else None
+            if docs:
+                add("ocr", "textract", "Lectura de documentos (Textract)")
+                link(backend, "ocr", "extrae datos")
+            if voice and not agent:
+                add("bot", "lex", "Asistente de voz y chat (Lex)")
+                link(backend, "bot", "conversa")
+            if media:
+                add("transcode", "mediaconvert", "Conversión de video (MediaConvert)")
+                link(backend, "transcode", "procesa video", is_async=True)
+            if geo:
+                add("geo", "location_service", "Mapas y rutas (Location Service)")
+                link(backend, "geo", "ubica y traza rutas")
+            if graph:
+                add("graphdb", "neptune", "Base de relaciones (Neptune)")
+                link(backend, "graphdb", "analiza relaciones")
+            if recsys and not agent:
+                add("recs", "personalize", "Recomendaciones (Personalize)")
+                link(backend, "recs", "recomienda")
+            if emailing:
+                add("campaign", "pinpoint", "Campañas (Pinpoint)")
+                link(backend, "campaign", "campañas", is_async=True)
+            if timeseries:
+                add("tsdb", "timestream", "Series de tiempo (Timestream)")
+                link(backend, "tsdb", "guarda métricas")
+
         if streaming:
             add("stream", "kinesis", "Datos en tiempo real (Kinesis)")
             add("lake", "s3", "Data lake (S3)")
-            link("actor", "stream", "eventos")
+            if iot:
+                add("iot", "iot_core", "Dispositivos conectados (IoT Core)")
+                link("actor", "iot", "mensajes")
+                link("iot", "stream", "eventos")
+            else:
+                link("actor", "stream", "eventos")
             link("stream", "lake", "entrega", is_async=True)
         if analytics:
             source = next((c.id for c in comps if c.id in ("lake", "files", "db")), None)

@@ -68,6 +68,22 @@ _SERVICES = (
     _s("sagemaker", "SageMaker", "sagemaker", AI, "app"),
     _s("bedrock", "Bedrock", "bedrock", AI, "app"),
     _s("agentcore", "Bedrock AgentCore", "bedrock_agentcore", AI, "app"),
+    _s("textract", "Textract", "textract", AI, "app"),
+    _s("comprehend", "Comprehend", "comprehend", AI, "app"),
+    _s("transcribe", "Transcribe", "transcribe", AI, "app"),
+    _s("polly", "Polly", "polly", AI, "app"),
+    _s("lex", "Lex", "lex", AI, "app"),
+    _s("rekognition", "Rekognition", "rekognition_2", AI, "app"),
+    _s("personalize", "Personalize", "personalize", AI, "app"),
+    _s("kendra", "Kendra", "kendra", AI, "data"),
+    _s("ses", "SES", "simple_email_service", INTEG, "app"),
+    _s("pinpoint", "Pinpoint", "pinpoint", INTEG, "app"),
+    _s("iot_core", "IoT Core", "iot_core", NETWORK, "app"),
+    _s("timestream", "Timestream", "timestream", DATABASE, "data"),
+    _s("neptune", "Neptune", "neptune", DATABASE, "data"),
+    _s("documentdb", "DocumentDB", "documentdb_with_mongodb_compatibility", DATABASE, "data"),
+    _s("mediaconvert", "MediaConvert", "elemental_mediaconvert", NETWORK, "app"),
+    _s("location_service", "Location Service", "location_service", NETWORK, "app"),
     # data
     _s("s3", "S3", "s3", STORAGE, "data"),
     _s("efs", "EFS", "elastic_file_system", STORAGE, "data"),
@@ -110,7 +126,7 @@ ALIASES = {
     "sfn": "step_functions", "container": "fargate", "k8s": "eks", "kubernetes": "eks",
     "quick_sight": "quicksight", "log": "cloudwatch", "logs": "cloudwatch", "monitoring": "cloudwatch",
     "secrets": "secrets_manager", "ssm": "systems_manager", "web": "users", "browser": "client",
-    "mobile_client": "mobile", "kinesis_firehose": "firehose",
+    "mobile_client": "mobile", "email": "ses", "mongodb": "documentdb", "graph": "neptune", "timeseries": "timestream", "ocr": "textract", "stt": "transcribe", "tts": "polly", "chatbot": "lex", "recommendations": "personalize", "kinesis_firehose": "firehose",
 }
 
 
