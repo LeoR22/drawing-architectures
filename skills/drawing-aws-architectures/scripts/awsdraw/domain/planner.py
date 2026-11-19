@@ -38,6 +38,7 @@ class RulePlanner:
         genai = _has(t, r"\bia\b", r"\bai\b", r"genai", r"llm", r"chatbot", r"\brag\b", r"generativ", r"bedrock", r"asistente")
         agent = _has(t, r"\bagente", r"\bagent", r"agentic", r"agentico", r"\bmcp\b", r"multi.?agente", r"multi.?agent", r"herramientas del agente", r"tool.?use", r"function calling")
         ml = _has(t, r"machine learning", r"\bml\b", r"modelo predictiv", r"entrenar", r"sagemaker")
+        agent = agent or genai  # chatbots, RAG and assistants use the same agent layout
         genai = genai or agent
         files = _has(t, r"archivo", r"\bfile", r"imagen", r"image", r"upload", r"subir", r"documento", r"almacen", r"storage", r"video", r"adjunto")
         queue = _has(t, r"cola\b", r"colas", r"queue", r"asincron", r"async", r"mensajer", r"background", r"segundo plano", r"batch")

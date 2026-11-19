@@ -35,7 +35,10 @@ class AgentView:
 
 
 def is_agentic(arch: Architecture) -> bool:
-    return arch.profile == "agents" or any(c.role == "agent" for c in arch.components)
+    if arch.profile == "agents":
+        return True
+    # A generative-AI model in the solution (chatbot, RAG, assistant, agent) gets the agent view.
+    return any(c.role == "agent" or c.service in ("bedrock", "agentcore") for c in arch.components)
 
 
 def _default_role(component: Component) -> str:
