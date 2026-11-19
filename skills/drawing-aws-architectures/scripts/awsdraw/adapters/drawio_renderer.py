@@ -1,8 +1,9 @@
-"""Renders an Architecture as a draw.io file with three pages (tabs), from simple to detailed:
+"""Renders an Architecture as a draw.io file with four pages (tabs), from simple to detailed:
 
-1. Visión general: four plain-language blocks + a numbered story anyone can read aloud.
-2. Servicios AWS: official icons, flat, with the plain-language role under each icon.
-3. Detalle técnico: Cloud / Region / VPC boxes and flow labels.
+1. System design: vendor-neutral building blocks (client, CDN, service, queue, database...).
+2. Visión general: four plain-language blocks + a numbered story anyone can read aloud.
+3. Servicios AWS: official icons, flat, with the plain-language role under each icon.
+4. Detalle técnico: Cloud / Region / VPC boxes and flow labels.
 """
 
 from __future__ import annotations
@@ -10,8 +11,8 @@ from __future__ import annotations
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
 
-from ..domain import capabilities, overview as overview_mod, overview_layout as ovl
-from ..domain.layout import Layout, Rect
+from ..domain import capabilities, overview as overview_mod, overview_layout as ovl, system_design
+from ..domain.layout import Layout, Rect, skips_over
 from ..domain.models import Architecture
 
 _POINTS_ICON = (
@@ -33,6 +34,16 @@ _GROUP_STYLES = {
 _BLOCK_COLORS = {0: ("#232F3D", "#232F3D", "#FFFFFF"), 1: ("#EFE8FF", "#8C4FFF", "#232F3E"), 2: ("#FFF1E0", "#ED7100", "#232F3E"), 3: ("#F7E6FA", "#C925D1", "#232F3E")}
 _EDGE = "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#232F3E;strokeWidth=2;fontSize=11;fontColor=#232F3E;labelBackgroundColor=#ffffff;"
 SERVICE_PAGE_MARGIN = (40, 110)
+_SHAPES = {  # kind.shape -> (width, height, style template, label position)
+    "actor": (40, 70, "shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=12;fontColor=#232F3E;strokeColor={stroke};fillColor={fill};strokeWidth=2;", "below"),
+    "hexagon": (130, 64, "shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fixedSize=1;fontSize=12;fontColor=#232F3E;fillColor={fill};strokeColor={stroke};strokeWidth=2;", "in"),
+    "cloud": (130, 76, "ellipse;shape=cloud;whiteSpace=wrap;html=1;fontSize=12;fontColor=#232F3E;fillColor={fill};strokeColor={stroke};strokeWidth=2;", "in"),
+    "service": (130, 64, "rounded=1;whiteSpace=wrap;html=1;fontSize=12;fontColor=#232F3E;fillColor={fill};strokeColor={stroke};strokeWidth=2;", "in"),
+    "cylinder": (100, 78, "shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=14;fontSize=12;fontColor=#232F3E;fillColor={fill};strokeColor={stroke};strokeWidth=2;", "in"),
+    "process": (130, 64, "shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;fontSize=12;fontColor=#232F3E;fillColor={fill};strokeColor={stroke};strokeWidth=2;", "in"),
+    "model": (130, 64, "rounded=1;arcSize=30;whiteSpace=wrap;html=1;fontSize=12;fontColor=#232F3E;fillColor={fill};strokeColor={stroke};strokeWidth=2;", "in"),
+    "support": (130, 64, "rounded=1;whiteSpace=wrap;html=1;dashed=1;fontSize=12;fontColor=#232F3E;fillColor={fill};strokeColor={stroke};strokeWidth=1;", "in"),
+}
 
 
 def node_style(kind: str, shape: str, color: str) -> str:
@@ -94,16 +105,40 @@ class DrawioRenderer:
     def render(self, arch: Architecture, layout: Layout) -> str:
         mxfile = ET.Element("mxfile", {"host": "drawio", "agent": "drawing-aws-architectures", "version": "24.0.0"})
         ov = overview_mod.build(arch)
+        self._system_design_page(mxfile, arch, layout)
         self._overview_page(mxfile, ov, ovl.compute(ov), arch.title)
         self._services_page(mxfile, arch, layout)
         self._technical_page(mxfile, arch, layout)
         ET.indent(mxfile)
         return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(mxfile, encoding="unicode") + "\n"
 
-    # ---- level 1 -------------------------------------------------------------------------
+    # ---- level 1: vendor-neutral system design ---------------------------------------------
+    def _system_design_page(self, mxfile, arch, layout):
+        xs = [n.rect.x for n in layout.nodes]
+        ys = [n.rect.y for n in layout.nodes]
+        dx, dy = SERVICE_PAGE_MARGIN[0] - min(xs), SERVICE_PAGE_MARGIN[1] - min(ys)
+        width = max(xs) + 78 + dx + 100
+        height = max(ys) + 108 + dy + 110
+        root = _page(mxfile, "level-1", "1 · System design", width, height)
+        _heading(root, f"Nivel 1 · System design: {arch.title}", "El entorno general de la solución con bloques genéricos, sin nombres de servicios: sirve para cualquier nube.", 40, 20)
+        column_of = {}
+        for n in layout.nodes:
+            kind = system_design.kind_of(n.component)
+            label = escape(system_design.generic_label(n.component))
+            w, h, style, lab = _SHAPES[kind.shape]
+            style = style.format(fill=kind.fill, stroke=kind.stroke)
+            cx, cy = n.rect.x + dx + 39, n.rect.y + dy + 39
+            column_of[n.component.id] = (n.column, n.rect.y)
+            _geo(_cell(root, n.component.id, label, style), cx - w / 2, cy - h / 2 - (10 if kind.shape == "actor" else 0), w, h)
+        self._flows(root, arch, column_of, layout)
+        legend = ("<b>Cómo leerlo:</b> figura humana = quien usa el sistema · hexágono = punto de entrada o control · nube = red de entrega · "
+                  "rectángulo = servicio · cilindro = datos · rectángulo con barras = cola o flujo de mensajes · gris punteado = apoyo (seguridad, monitoreo) · línea punteada = proceso asíncrono.")
+        _geo(_cell(root, "legend", legend, "text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=12;fontColor=#232F3E;fillColor=#FAFAFA;strokeColor=#D5DBDB;spacing=8;"), 40, height - 80, max(width - 80, 400), 60)
+
+    # ---- level 2 -------------------------------------------------------------------------
     def _overview_page(self, mxfile, ov, lay, title):
-        root = _page(mxfile, "level-1", "1 · Visión general", lay.width, lay.height)
-        _heading(root, f"Nivel 1 · Visión general: {title}", "Qué hace el sistema, en palabras simples. Los números siguen la historia de abajo.", *lay.title_at)
+        root = _page(mxfile, "level-2", "2 · Visión general", lay.width, lay.height)
+        _heading(root, f"Nivel 2 · Visión general: {title}", "Qué hace el sistema, en palabras simples. Los números siguen la historia de abajo.", *lay.title_at)
         for box in ov.boxes:
             fill, stroke, font = _BLOCK_COLORS[box.column]
             rect = lay.boxes[box.key]
@@ -138,8 +173,8 @@ class DrawioRenderer:
         dx, dy = SERVICE_PAGE_MARGIN[0] - min(xs), SERVICE_PAGE_MARGIN[1] - min(ys)
         width = max(xs) + 78 + dx + 60
         height = max(ys) + 108 + dy + 40
-        root = _page(mxfile, "level-2", "2 · Servicios AWS", width, height)
-        _heading(root, "Nivel 2 · Servicios de AWS", "Qué servicio hace cada parte. Debajo de cada ícono está su función en palabras simples.", 40, 20)
+        root = _page(mxfile, "level-3", "3 · Servicios AWS", width, height)
+        _heading(root, "Nivel 3 · Servicios de AWS", "Qué servicio hace cada parte. Debajo de cada ícono está su función en palabras simples.", 40, 20)
         column_of = {}
         for n in layout.nodes:
             column_of[n.component.id] = (n.column, n.rect.y)
@@ -147,12 +182,12 @@ class DrawioRenderer:
             label = escape(n.component.label or n.service.label)
             value = f"{label}<br><font style=\"font-size:10px\" color=\"#687078\">{escape(role)}</font>"
             _geo(_cell(root, n.component.id, value, node_style(n.service.kind, n.service.shape, n.service.color)), n.rect.x + dx, n.rect.y + dy, 78, 78)
-        self._flows(root, arch, column_of)
+        self._flows(root, arch, column_of, layout)
 
     # ---- level 3 -------------------------------------------------------------------------
     def _technical_page(self, mxfile, arch, layout):
-        root = _page(mxfile, "level-3", "3 · Detalle técnico", layout.width, layout.height)
-        _heading(root, "Nivel 3 · Detalle técnico", f"{arch.title}. Nube, región, red privada (VPC) y flujos. Línea punteada = proceso asíncrono.", *layout.title_at)
+        root = _page(mxfile, "level-4", "4 · Detalle técnico", layout.width, layout.height)
+        _heading(root, "Nivel 4 · Detalle técnico", f"{arch.title}. Nube, región, red privada (VPC) y flujos. Línea punteada = proceso asíncrono.", *layout.title_at)
         origins = {"1": (0, 0)}
         for g in layout.groups:
             ox, oy = origins[g.parent]
@@ -163,13 +198,14 @@ class DrawioRenderer:
             column_of[n.component.id] = (n.column, n.rect.y)
             ox, oy = origins[n.parent]
             _geo(_cell(root, n.component.id, escape(n.component.label or n.service.label), node_style(n.service.kind, n.service.shape, n.service.color), parent=n.parent), n.rect.x - ox, n.rect.y - oy, 78, 78)
-        self._flows(root, arch, column_of)
+        self._flows(root, arch, column_of, layout)
 
     @staticmethod
-    def _flows(root, arch, column_of):
+    def _flows(root, arch, column_of, layout):
         for i, f in enumerate(arch.flows, 1):
             forward, down = _flow_geometry(column_of, f.source, f.target)
-            _edge(root, f"edge{i}", f.source, f.target, f.label, "dashed=1;" if f.is_async else "", forward, down)
+            over = skips_over(layout.nodes, f.source, f.target)
+            _edge(root, f"edge{i}", f.source, f.target, f.label, "dashed=1;" if f.is_async else "", forward, down, over=over)
 
 
 def _xywh(rect: Rect):

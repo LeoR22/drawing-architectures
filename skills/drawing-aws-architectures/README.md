@@ -21,7 +21,7 @@ Agent Skill que convierte los **requisitos de un proyecto** (texto, PDF, Word o 
    - [Versión web sin instalar nada (GitHub Pages)](#versión-web-sin-instalar-nada-github-pages)
 6. [Formato del spec JSON](#6-formato-del-spec-json)
 7. [Catálogo de servicios](#7-catálogo-de-servicios)
-8. [Los 3 niveles del diagrama](#8-los-3-niveles-del-diagrama)
+8. [Los 4 niveles del diagrama](#8-los-4-niveles-del-diagrama)
 9. [Cómo se dibuja el diagrama](#9-cómo-se-dibuja-el-diagrama)
 10. [Reglas de validación](#10-reglas-de-validación)
 11. [Planificador offline vs. con IA](#11-planificador-offline-vs-con-ia)
@@ -217,23 +217,26 @@ Ejecuta `python scripts/run.py catalog` para verlo completo. Resumen por columna
 
 Cada entrada apunta a un ícono de la biblioteca **oficial** `Sidebar-AWS4.js` de draw.io. Un test comprueba que todos existan (fixture en `tests/fixtures/aws4-icons.txt`), así no salen cuadros vacíos. Si pides un servicio desconocido, el error sugiere los más parecidos (por ejemplo `dynamodbb` → `dynamodb`).
 
-## 8. Los 3 niveles del diagrama
+## 8. Los 4 niveles del diagrama
 
-El archivo `.drawio` trae **tres pestañas**, de lo más simple a lo más técnico. La idea: que cualquier persona entienda el sistema a simple vista y tú puedas explicarlo.
+El archivo `.drawio` trae **cuatro pestañas**, de lo más general a lo más técnico. La idea: entender primero el entorno de la solución, sin nombres de servicios, y bajar de nivel solo cuando haga falta.
 
 | Nivel | Pestaña | Para quién | Qué muestra |
 |---|---|---|---|
-| 1 | **Visión general** | Cualquier persona (gerencia, clientes, compañeros no técnicos) | 4 bloques: *Personas usuarias → Entrada y seguridad → Lógica del negocio → Datos*, más una franja de seguridad y operación. Flechas numeradas y una **historia paso a paso** ("Cómo explicarlo") |
-| 2 | **Servicios AWS** | Equipo de producto y desarrollo | Los íconos oficiales de AWS; debajo de cada uno, su función en palabras simples (por ejemplo "Base de datos") |
-| 3 | **Detalle técnico** | Arquitectos e ingenieros | Cajas AWS Cloud / Región / VPC, etiquetas de cada flujo y líneas punteadas para procesos asíncronos |
+| 1 | **System design** | Todo el equipo; sirve para cualquier nube | El entorno general con bloques genéricos al estilo *system design*: figura de usuario, CDN (nube), puntos de entrada (hexágonos), servicios (rectángulos), colas (rectángulo con barras), bases de datos y archivos (cilindros) y apoyo (gris punteado). **Sin nombres de servicios** |
+| 2 | **Visión general** | Cualquier persona (gerencia, clientes, compañeros no técnicos) | 4 bloques: *Personas usuarias → Entrada y seguridad → Lógica del negocio → Datos*, más una franja de seguridad y operación. Flechas numeradas y una **historia paso a paso** ("Cómo explicarlo") |
+| 3 | **Servicios AWS** | Producto y desarrollo | Los íconos oficiales de AWS; debajo de cada uno, su función en palabras simples |
+| 4 | **Detalle técnico** | Arquitectos e ingenieros | Cajas AWS Cloud / Región / VPC, etiquetas de cada flujo y líneas punteadas para procesos asíncronos |
 
-**Cómo explicarlo en una reunión:** empieza por el nivel 1 y lee la historia numerada (cada número está en una flecha). Si preguntan "¿con qué servicio?", pasa al nivel 2. Si preguntan por red o seguridad, abre el nivel 3.
+**Cómo usarlos en una reunión:** abre el nivel 1 para ponerse de acuerdo en *qué piezas hay y cómo se conectan*, sin discutir marcas. Luego el nivel 2 para contarlo en palabras simples (cada número está en una flecha). Si preguntan "¿con qué servicio?", pasa al nivel 3. Si preguntan por red o seguridad, al nivel 4.
 
-El nivel 1 se genera solo, a partir del mismo spec: `domain/capabilities.py` traduce cada servicio a su función en lenguaje simple (por ejemplo Cognito → "Inicio de sesión") y los agrupa en los 4 bloques. Para entenderlo en voz alta, no hace falta saber AWS.
+**Cómo se generan:** todos salen del mismo spec. `domain/system_design.py` reduce cada servicio a un bloque clásico (por ejemplo Lambda/Fargate → "Servicio de aplicación", SQS → "Cola de mensajes", DynamoDB/Aurora → "Base de datos") y quita los nombres de proveedor de las etiquetas ("Lógica del negocio (Lambda)" → "Lógica del negocio"). `domain/capabilities.py` agrupa lo mismo en 4 bloques para el nivel 2. Como el nivel 1 no depende de AWS, es la base natural para soportar GCP y Azure más adelante. Un test verifica que ese nivel no contenga nombres de servicios.
+
+Para reducir cruces, el layout acomoda cada componente cerca de lo que lo alimenta y dibuja como arco las flechas que saltan columnas.
 
 ## 9. Cómo se dibuja el diagrama
 
-Esta sección describe el nivel 3 (y la base del nivel 2). El layout es **determinista** (mismo spec → mismo dibujo) y de izquierda a derecha:
+Esta sección describe el nivel 4 (y la base de los niveles 1 y 3). El layout es **determinista** (mismo spec → mismo dibujo) y de izquierda a derecha:
 
 ```
 Actores | Edge | Aplicación | Datos | Operaciones
@@ -275,7 +278,7 @@ SKILL.md                    instrucciones para el agente
 scripts/run.py              punto de entrada (funciona con python -I)
 scripts/awsdraw/
   domain/                   reglas puras, sin I/O
-    models.py  catalog.py  capabilities.py  rules.py  layout.py  overview.py  overview_layout.py  planner.py  documents.py  errors.py
+    models.py  catalog.py  capabilities.py  system_design.py  rules.py  layout.py  overview.py  overview_layout.py  planner.py  documents.py  errors.py
   application/              casos de uso y puertos (interfaces)
     ports.py  use_cases.py  (GenerateDiagram, PlanAndGenerate, SaveDiagram, CollectRequirements)
   adapters/                 detalles externos
@@ -302,7 +305,7 @@ Regla de dependencia: `domain` no importa nada de `application` ni `adapters`; `
 python -m unittest discover -s tests
 ```
 
-52 pruebas: catálogo contra la biblioteca real de draw.io, reglas, que los nodos no se solapen, que la caja VPC contenga solo nodos VPC, XML bien formado con ids únicos y aristas válidas, escapado de caracteres, planificador, planificadores IA (Anthropic y GitHub Models) con respuestas simuladas, servidor web (Host/Origin, subidas, guardado), instalador, regla de dependencias, que `docs/` esté al día con el código y revisión de `SKILL.md`. También hay una prueba de presupuesto de tiempo (<1 s).
+56 pruebas: catálogo contra la biblioteca real de draw.io, reglas, que los nodos no se solapen, que la caja VPC contenga solo nodos VPC, XML bien formado con ids únicos y aristas válidas, escapado de caracteres, planificador, planificadores IA (Anthropic y GitHub Models) con respuestas simuladas, servidor web (Host/Origin, subidas, guardado), instalador, regla de dependencias, que `docs/` esté al día con el código y revisión de `SKILL.md`. También hay una prueba de presupuesto de tiempo (<1 s).
 
 ## 15. Solución de problemas
 

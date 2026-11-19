@@ -4,7 +4,7 @@ Colección de **Agent Skills** para generar arquitecturas cloud de alto nivel co
 
 | Skill | Nube | Salida | Editor | Estado |
 |---|---|---|---|---|
-| [`drawing-aws-architectures`](skills/drawing-aws-architectures/) | AWS | draw.io (`.drawio`) | VS Code | Disponible |
+| [`drawing-aws-architectures`](skills/drawing-aws-architectures/) | AWS | draw.io (`.drawio`, 4 niveles: system design agnóstico → visión general → servicios → detalle) | VS Code | Disponible |
 | `drawing-gcp-architectures` | GCP | draw.io | VS Code | Planeada |
 | `drawing-azure-architectures` | Azure | draw.io | VS Code | Planeada |
 

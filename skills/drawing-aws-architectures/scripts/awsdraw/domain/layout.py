@@ -68,6 +68,28 @@ def _union_all(rects: list[Rect]) -> Rect:
     return out
 
 
+def _order_by_neighbours(columns: dict, arch: Architecture) -> None:
+    """Barycentre ordering: a component sits near the average row of what feeds it, which cuts crossing arrows."""
+    rank: dict[str, int] = {}
+    for i in sorted(columns):
+        def desired(entry):
+            index, item = entry
+            rows = [rank[f.source] for f in arch.flows if f.target == item[0].id and f.source in rank]
+            return sum(rows) / len(rows) if rows else index
+        ordered = [item for _, item in sorted(enumerate(columns[i]), key=lambda e: (desired(e), e[0]))]
+        ids = {item[0].id for item in ordered}
+        for f in arch.flows:  # a component fed from the same column goes right below its feeder
+            if f.source in ids and f.target in ids and f.source != f.target:
+                moving = next(it for it in ordered if it[0].id == f.target)
+                ordered.remove(moving)
+                at = next(n for n, it in enumerate(ordered) if it[0].id == f.source) + 1
+                while at < len(ordered) and any(g.source == ordered[at - 1][0].id and g.target == ordered[at][0].id for g in arch.flows):
+                    at += 1
+                ordered.insert(at, moving)
+        columns[i] = ordered
+        rank.update({item[0].id: r for r, item in enumerate(ordered)})
+
+
 def compute(arch: Architecture) -> Layout:
     resolved = []
     for c in arch.components:
@@ -80,6 +102,7 @@ def compute(arch: Architecture) -> Layout:
     for item in resolved:
         columns[col_of[item[2]]].append(item)
 
+    _order_by_neighbours(columns, arch)
     vpc_cols = sorted({col_of[t] for c, _, t in resolved if c.vpc})
     span = range(vpc_cols[0], vpc_cols[-1] + 1) if vpc_cols else range(0)
     r0 = max((sum(1 for it in columns[i] if not it[0].vpc) for i in span), default=0)
@@ -156,3 +179,13 @@ def compute(arch: Architecture) -> Layout:
     nodes = [Node(n.component, n.service, n.column, n.row, shift(n.rect), n.parent) for n in nodes]
     groups = [Group(g.id, g.kind, g.label, shift(g.rect), g.parent) for g in groups]
     return Layout(tuple(nodes), tuple(groups), bounds.w + 2 * MARGIN, bounds.h + 2 * MARGIN + 40, (MARGIN, MARGIN))
+
+
+def skips_over(nodes, source_id: str, target_id: str) -> bool:
+    """True when a straight arrow would cross a box in a column between source and target (draw it as an arc)."""
+    by_id = {n.component.id: n for n in nodes}
+    a, b = by_id[source_id], by_id[target_id]
+    if b.column - a.column < 2:
+        return False
+    lo, hi = min(a.rect.y, b.rect.y) - 50, max(a.rect.y, b.rect.y) + 50
+    return any(a.column < n.column < b.column and lo <= n.rect.y <= hi for n in nodes)

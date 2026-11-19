@@ -22,7 +22,7 @@ from awsdraw.adapters.llm_anthropic import AnthropicPlanner  # noqa: E402
 from awsdraw.adapters.llm_github import GithubModelsPlanner  # noqa: E402
 from awsdraw.adapters.vscode_opener import VsCodeOpener  # noqa: E402
 from awsdraw.application.use_cases import CollectRequirements, GenerateDiagram, PlanAndGenerate  # noqa: E402
-from awsdraw.domain import capabilities, catalog, layout, overview  # noqa: E402
+from awsdraw.domain import capabilities, catalog, layout, overview, system_design  # noqa: E402
 from awsdraw.domain.errors import SpecError  # noqa: E402
 from awsdraw.domain.models import Architecture, Component, Flow, Requirements  # noqa: E402
 from awsdraw.domain.planner import RulePlanner  # noqa: E402
@@ -68,6 +68,36 @@ class CapabilityTests(unittest.TestCase):
         pairs = [(cols[l.source], cols[l.target]) for l in ov.links]
         self.assertEqual(pairs, sorted(pairs))
         self.assertTrue(any(b.key == "monitoring" for b in ov.support))
+
+
+class SystemDesignTests(unittest.TestCase):
+    def test_every_service_maps_to_a_generic_kind(self):
+        self.assertEqual([k for k in catalog.SERVICES if k not in system_design.KIND_OF], [])
+        self.assertEqual([k for k in system_design.KIND_OF.values() if k not in system_design.KINDS], [])
+
+    def test_labels_are_vendor_neutral(self):
+        vendors = {s.label.lower() for s in catalog.SERVICES.values() if s.tier != "actors"}
+        for name, res in RendererTests().render_all():
+            page = list(ET.fromstring(res.xml.split("?>", 1)[1]).iter("diagram"))[0]
+            text = " ".join((c.get("value") or "") for c in page.iter("mxCell") if c.get("vertex") and c.get("id") not in ("title", "subtitle", "legend")).lower()
+            self.assertFalse([v for v in vendors if re.search(rf"(?<!\w){re.escape(v)}(?!\w)", text)], f"{name}: vendor name in system design page")
+
+    def test_generic_label_strips_vendor_parentheses(self):
+        from awsdraw.domain.models import Component
+        self.assertEqual(system_design.generic_label(Component("a", "lambda", "Lógica del negocio (Lambda)")), "Lógica del negocio")
+        self.assertEqual(system_design.generic_label(Component("a", "cloudfront", "CloudFront")), "CDN (red de entrega)")
+        self.assertEqual(system_design.generic_label(Component("a", "dynamodb", "")), "Base de datos")
+        self.assertEqual(system_design.generic_label(Component("a", "aurora", "Aurora (SQL)")), "Base de datos (SQL)")
+        self.assertEqual(system_design.generic_label(Component("a", "s3", "Uploads (S3)")), "Uploads")
+
+    def test_same_column_feeders_are_adjacent_and_skip_arcs_avoid_boxes(self):
+        arch = RulePlanner().plan(Requirements("web con login, sql, colas, correo"))
+        lay = layout.compute(arch)
+        rows = {n.component.id: (n.column, n.rect.y) for n in lay.nodes}
+        self.assertLess(rows["queue"][1] - rows["compute"][1], 2 * layout.ROW_H)
+        for f in arch.flows:
+            if layout.skips_over(lay.nodes, f.source, f.target):
+                self.assertGreaterEqual(rows[f.target][0] - rows[f.source][0], 2)
 
 
 class RuleTests(unittest.TestCase):
@@ -149,11 +179,11 @@ class RendererTests(unittest.TestCase):
         for f in sorted((ROOT / "examples").glob("*.json")):
             yield f.name, gen(json_spec.load(str(f)))
 
-    def test_three_pages_each_well_formed_with_valid_edges(self):
+    def test_four_pages_each_well_formed_with_valid_edges(self):
         for name, res in self.render_all():
             root = ET.fromstring(res.xml.split("?>", 1)[1])
             pages = list(root.iter("diagram"))
-            self.assertEqual([d.get("name")[:1] for d in pages], ["1", "2", "3"], name)
+            self.assertEqual([d.get("name")[:1] for d in pages], ["1", "2", "3", "4"], name)
             for page in pages:
                 cells = list(page.iter("mxCell"))
                 ids = [c.get("id") for c in cells]
@@ -172,12 +202,12 @@ class RendererTests(unittest.TestCase):
             self.assertLessEqual(len(ov.boxes), 4, name)
             self.assertGreaterEqual(len(ov.story), 1, name)
             self.assertEqual([l.step for l in ov.links], list(range(1, len(ov.links) + 1)))
-            page = ET.fromstring(res.xml.split("?>", 1)[1]).find("diagram")
+            page = list(ET.fromstring(res.xml.split("?>", 1)[1]).iter("diagram"))[1]
             self.assertIn("story", {c.get("id") for c in page.iter("mxCell")})
 
     def test_level_two_shows_plain_role_under_each_icon(self):
         res = gen(json_spec.load(str(ROOT / "examples/serverless-web.json")))
-        page = list(ET.fromstring(res.xml.split("?>", 1)[1]).iter("diagram"))[1]
+        page = list(ET.fromstring(res.xml.split("?>", 1)[1]).iter("diagram"))[2]
         db = next(c for c in page.iter("mxCell") if c.get("id") == "db")
         self.assertIn("Base de datos", db.get("value"))
 
@@ -188,7 +218,7 @@ class RendererTests(unittest.TestCase):
 
     def test_children_use_relative_coordinates(self):
         res = gen(json_spec.load(str(ROOT / "examples/containers-three-tier.json")))
-        root = list(ET.fromstring(res.xml.split("?>", 1)[1]).iter("diagram"))[2]  # level 3 uses groups
+        root = list(ET.fromstring(res.xml.split("?>", 1)[1]).iter("diagram"))[3]  # level 4 uses groups
         cells = {c.get("id"): c for c in root.iter("mxCell")}
         absolute = {n.component.id: n.rect for n in res.layout.nodes}
         groups = {g.id: g.rect for g in res.layout.groups}
