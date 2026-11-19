@@ -5,7 +5,7 @@ description: Produces a fast, high-level AWS architecture as an editable draw.io
 
 # Drawing AWS architectures (draw.io, VS Code)
 
-Goal: requirements in, a `.drawio` file with official AWS icons out, in **1-3 minutes total**. High level only: 6-14 components, no ADRs, no cost models, no deep resilience analysis. For deep design reviews use `designing-cloud-architectures` instead.
+Goal: requirements in, a `.drawio` file with official AWS icons out, in **1-3 minutes total**. The file has **3 tabs** so anyone can follow it: *1 · Visión general* (four plain-language blocks and a numbered story to explain it aloud), *2 · Servicios AWS* (icons with their plain role) and *3 · Detalle técnico* (Cloud/Region/VPC). High level only: 6-14 components, no ADRs, no cost models, no deep resilience analysis. For deep design reviews use `designing-cloud-architectures` instead.
 
 ## Fast workflow (budget: 1-3 minutes)
 
@@ -28,7 +28,7 @@ python SKILL_DIR/scripts/run.py generate architecture.json -o architecture.drawi
 ```
 Errors name the problem (for example `AWS002` unknown service, with suggestions). Fix the spec and rerun once. Warnings (`AWS005`, `AWS006`) are advisory.
 
-**4. Deliver.** Tell the user where the file is, that it opens with the **Draw.io Integration** extension (`hediet.vscode-drawio`), and list the assumptions in at most 3 bullets. Do not paste the XML.
+**4. Deliver.** Tell the user where the file is, that tab 1 is the one to present to non-technical people (its numbered story explains the system in plain words), that it opens with the **Draw.io Integration** extension (`hediet.vscode-drawio`), and list the assumptions in at most 3 bullets. Do not paste the XML.
 
 No spec by hand? `python SKILL_DIR/scripts/run.py plan "<requirements text>" -o architecture.drawio` plans offline from keywords (Spanish and English) in milliseconds. Use it as a starting point or when speed matters more than precision.
 
@@ -55,6 +55,7 @@ No spec by hand? `python SKILL_DIR/scripts/run.py plan "<requirements text>" -o 
 }
 ```
 
+- `label`: write it in the user's language in plain words, e.g. `Base de datos (DynamoDB)`; level 2 adds the plain role below the icon automatically.
 - `service`: catalog key or alias (`apigw`, `dynamo`, `redis`, `k8s`...).
 - `tier` is optional (`actors|edge|app|data|ops`); the catalog default places the column automatically.
 - `vpc: true` draws the component inside a VPC box (containers, caches, SQL). Everything else sits in the Region box, global services (CloudFront, Route 53, WAF) outside it.

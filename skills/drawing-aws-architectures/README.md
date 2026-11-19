@@ -21,14 +21,15 @@ Agent Skill que convierte los **requisitos de un proyecto** (texto, PDF, Word o 
    - [Versión web sin instalar nada (GitHub Pages)](#versión-web-sin-instalar-nada-github-pages)
 6. [Formato del spec JSON](#6-formato-del-spec-json)
 7. [Catálogo de servicios](#7-catálogo-de-servicios)
-8. [Cómo se dibuja el diagrama](#8-cómo-se-dibuja-el-diagrama)
-9. [Reglas de validación](#9-reglas-de-validación)
-10. [Planificador offline vs. con IA](#10-planificador-offline-vs-con-ia)
-11. [Arquitectura del código (clean architecture)](#11-arquitectura-del-código-clean-architecture)
-12. [Seguridad](#12-seguridad)
-13. [Pruebas](#13-pruebas)
-14. [Solución de problemas](#14-solución-de-problemas)
-15. [Límites y próximos pasos](#15-límites-y-próximos-pasos)
+8. [Los 3 niveles del diagrama](#8-los-3-niveles-del-diagrama)
+9. [Cómo se dibuja el diagrama](#9-cómo-se-dibuja-el-diagrama)
+10. [Reglas de validación](#10-reglas-de-validación)
+11. [Planificador offline vs. con IA](#11-planificador-offline-vs-con-ia)
+12. [Arquitectura del código (clean architecture)](#12-arquitectura-del-código-clean-architecture)
+13. [Seguridad](#13-seguridad)
+14. [Pruebas](#14-pruebas)
+15. [Solución de problemas](#15-solución-de-problemas)
+16. [Límites y próximos pasos](#16-límites-y-próximos-pasos)
 
 ---
 
@@ -216,9 +217,23 @@ Ejecuta `python scripts/run.py catalog` para verlo completo. Resumen por columna
 
 Cada entrada apunta a un ícono de la biblioteca **oficial** `Sidebar-AWS4.js` de draw.io. Un test comprueba que todos existan (fixture en `tests/fixtures/aws4-icons.txt`), así no salen cuadros vacíos. Si pides un servicio desconocido, el error sugiere los más parecidos (por ejemplo `dynamodbb` → `dynamodb`).
 
-## 8. Cómo se dibuja el diagrama
+## 8. Los 3 niveles del diagrama
 
-El layout es **determinista** (mismo spec → mismo dibujo) y de izquierda a derecha:
+El archivo `.drawio` trae **tres pestañas**, de lo más simple a lo más técnico. La idea: que cualquier persona entienda el sistema a simple vista y tú puedas explicarlo.
+
+| Nivel | Pestaña | Para quién | Qué muestra |
+|---|---|---|---|
+| 1 | **Visión general** | Cualquier persona (gerencia, clientes, compañeros no técnicos) | 4 bloques: *Personas usuarias → Entrada y seguridad → Lógica del negocio → Datos*, más una franja de seguridad y operación. Flechas numeradas y una **historia paso a paso** ("Cómo explicarlo") |
+| 2 | **Servicios AWS** | Equipo de producto y desarrollo | Los íconos oficiales de AWS; debajo de cada uno, su función en palabras simples (por ejemplo "Base de datos") |
+| 3 | **Detalle técnico** | Arquitectos e ingenieros | Cajas AWS Cloud / Región / VPC, etiquetas de cada flujo y líneas punteadas para procesos asíncronos |
+
+**Cómo explicarlo en una reunión:** empieza por el nivel 1 y lee la historia numerada (cada número está en una flecha). Si preguntan "¿con qué servicio?", pasa al nivel 2. Si preguntan por red o seguridad, abre el nivel 3.
+
+El nivel 1 se genera solo, a partir del mismo spec: `domain/capabilities.py` traduce cada servicio a su función en lenguaje simple (por ejemplo Cognito → "Inicio de sesión") y los agrupa en los 4 bloques. Para entenderlo en voz alta, no hace falta saber AWS.
+
+## 9. Cómo se dibuja el diagrama
+
+Esta sección describe el nivel 3 (y la base del nivel 2). El layout es **determinista** (mismo spec → mismo dibujo) y de izquierda a derecha:
 
 ```
 Actores | Edge | Aplicación | Datos | Operaciones
@@ -230,7 +245,7 @@ Actores | Edge | Aplicación | Datos | Operaciones
 - Las flechas son ortogonales y draw.io las enruta al abrir el archivo; son del mismo color y trazo para que se lean bien.
 - El resultado es un `mxfile` de draw.io sin comprimir, con grupos reales (al mover la caja VPC se mueven sus hijos).
 
-## 9. Reglas de validación
+## 10. Reglas de validación
 
 | Código | Tipo | Significado |
 |---|---|---|
@@ -245,7 +260,7 @@ Actores | Edge | Aplicación | Datos | Operaciones
 
 Con errores no se genera archivo; con avisos sí.
 
-## 10. Planificador offline vs. con IA
+## 11. Planificador offline vs. con IA
 
 **Offline** (`domain/planner.py`): reglas por palabras clave en español e inglés. Por ejemplo, "login" activa Cognito; "relacional/SQL" activa Aurora; "colas/asíncrono" activa SQS + un worker; "contenedores/microservicios" cambia API Gateway + Lambda por ALB + Fargate dentro de una VPC; "analítica/BI" añade Glue + Athena + QuickSight; "IA/chatbot/RAG" añade Bedrock. Si no reconoce nada, genera una base serverless (API Gateway → Lambda → DynamoDB). Es instantáneo y gratis, pero es una heurística: revisa y ajusta el resultado.
 
@@ -253,14 +268,14 @@ Con errores no se genera archivo; con avisos sí.
 
 Cuando trabajas con un agente (Copilot/Claude Code), el propio agente actúa como "planificador" escribiendo el spec, así que no necesitas ninguna clave.
 
-## 11. Arquitectura del código (clean architecture)
+## 12. Arquitectura del código (clean architecture)
 
 ```
 SKILL.md                    instrucciones para el agente
 scripts/run.py              punto de entrada (funciona con python -I)
 scripts/awsdraw/
   domain/                   reglas puras, sin I/O
-    models.py  catalog.py  rules.py  layout.py  planner.py  documents.py  errors.py
+    models.py  catalog.py  capabilities.py  rules.py  layout.py  overview.py  overview_layout.py  planner.py  documents.py  errors.py
   application/              casos de uso y puertos (interfaces)
     ports.py  use_cases.py  (GenerateDiagram, PlanAndGenerate, SaveDiagram, CollectRequirements)
   adapters/                 detalles externos
@@ -274,22 +289,22 @@ reference/  examples/  tests/
 
 Regla de dependencia: `domain` no importa nada de `application` ni `adapters`; `application` no importa `adapters`. Un test con `ast` lo verifica, y otro comprueba que `domain` no use módulos de I/O. Para añadir otro editor o formato (Mermaid, otro IDE) se crea un adaptador nuevo sin tocar el dominio.
 
-## 12. Seguridad
+## 13. Seguridad
 
 - Los archivos del usuario se tratan como **datos no confiables**: `.docx` se lee con tope de tamaño, sin extraer a disco y rechazando XML con `DOCTYPE`/`ENTITY`; las imágenes se validan por su firma; los PDF se leen con rutas absolutas.
 - La interfaz escucha **solo en 127.0.0.1**, valida `Host` y `Origin` (anti DNS-rebinding/CSRF), acepta solo JSON, limita el cuerpo a 40 MB, guarda las subidas en una carpeta temporal con nombres saneados (se borra tras cada petición) y solo escribe dentro de `--output-dir`.
 - El texto del caso de uso se envía al modelo como **datos**, con instrucción explícita de no obedecerlo.
 - Las claves/tokens se leen de variables de entorno; nunca se guardan en disco.
 
-## 13. Pruebas
+## 14. Pruebas
 
 ```bash
 python -m unittest discover -s tests
 ```
 
-47 pruebas: catálogo contra la biblioteca real de draw.io, reglas, que los nodos no se solapen, que la caja VPC contenga solo nodos VPC, XML bien formado con ids únicos y aristas válidas, escapado de caracteres, planificador, planificadores IA (Anthropic y GitHub Models) con respuestas simuladas, servidor web (Host/Origin, subidas, guardado), instalador, regla de dependencias, que `docs/` esté al día con el código y revisión de `SKILL.md`. También hay una prueba de presupuesto de tiempo (<1 s).
+52 pruebas: catálogo contra la biblioteca real de draw.io, reglas, que los nodos no se solapen, que la caja VPC contenga solo nodos VPC, XML bien formado con ids únicos y aristas válidas, escapado de caracteres, planificador, planificadores IA (Anthropic y GitHub Models) con respuestas simuladas, servidor web (Host/Origin, subidas, guardado), instalador, regla de dependencias, que `docs/` esté al día con el código y revisión de `SKILL.md`. También hay una prueba de presupuesto de tiempo (<1 s).
 
-## 14. Solución de problemas
+## 15. Solución de problemas
 
 | Síntoma | Causa y solución |
 |---|---|
@@ -303,7 +318,7 @@ python -m unittest discover -s tests
 | La skill no aparece en Copilot | Recarga la ventana; confirma que la carpeta está en `.github/skills/<nombre>/SKILL.md` |
 | El puerto 8765 está ocupado | `python scripts/run.py ui --port 8800` |
 
-## 15. Límites y próximos pasos
+## 16. Límites y próximos pasos
 
 - Solo AWS y VS Code por ahora. Siguientes pasos naturales: GCP/Azure, otros IDE, subredes y AZ, exportar PNG/SVG.
 - El planificador offline es heurístico; para casos complejos usa un agente o el modo IA y revisa el resultado.

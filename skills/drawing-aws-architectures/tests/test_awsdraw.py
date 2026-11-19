@@ -22,7 +22,7 @@ from awsdraw.adapters.llm_anthropic import AnthropicPlanner  # noqa: E402
 from awsdraw.adapters.llm_github import GithubModelsPlanner  # noqa: E402
 from awsdraw.adapters.vscode_opener import VsCodeOpener  # noqa: E402
 from awsdraw.application.use_cases import CollectRequirements, GenerateDiagram, PlanAndGenerate  # noqa: E402
-from awsdraw.domain import catalog, layout  # noqa: E402
+from awsdraw.domain import capabilities, catalog, layout, overview  # noqa: E402
 from awsdraw.domain.errors import SpecError  # noqa: E402
 from awsdraw.domain.models import Architecture, Component, Flow, Requirements  # noqa: E402
 from awsdraw.domain.planner import RulePlanner  # noqa: E402
@@ -50,6 +50,24 @@ class CatalogTests(unittest.TestCase):
     def test_lookup_and_suggestions(self):
         self.assertEqual(catalog.lookup("API-Gateway").key, "api_gateway")
         self.assertIn("dynamodb", catalog.suggestions("dynamodbb"))
+
+
+class CapabilityTests(unittest.TestCase):
+    def test_every_service_has_a_plain_language_capability(self):
+        self.assertEqual([k for k in catalog.SERVICES if k not in capabilities.CAPABILITY_OF], [])
+        self.assertEqual([c for c in capabilities.CAPABILITY_OF.values() if c not in capabilities.CAPABILITIES], [])
+
+    def test_blocks_cover_all_non_support_capabilities(self):
+        for cap in capabilities.CAPABILITIES.values():
+            self.assertEqual(capabilities.block_of(cap.key) is None, cap.column == capabilities.SUPPORT, cap.key)
+
+    def test_overview_merges_and_orders_story_left_to_right(self):
+        arch = json_spec.load(str(ROOT / "examples/containers-three-tier.json"))
+        ov = overview.build(arch)
+        cols = {b.key: b.column for b in ov.boxes}
+        pairs = [(cols[l.source], cols[l.target]) for l in ov.links]
+        self.assertEqual(pairs, sorted(pairs))
+        self.assertTrue(any(b.key == "monitoring" for b in ov.support))
 
 
 class RuleTests(unittest.TestCase):
@@ -131,19 +149,37 @@ class RendererTests(unittest.TestCase):
         for f in sorted((ROOT / "examples").glob("*.json")):
             yield f.name, gen(json_spec.load(str(f)))
 
-    def test_well_formed_unique_ids_and_valid_edges(self):
+    def test_three_pages_each_well_formed_with_valid_edges(self):
         for name, res in self.render_all():
             root = ET.fromstring(res.xml.split("?>", 1)[1])
-            cells = list(root.iter("mxCell"))
-            ids = [c.get("id") for c in cells]
-            self.assertEqual(len(ids), len(set(ids)), name)
-            known = set(ids)
-            for c in cells:
-                if c.get("edge"):
-                    self.assertIn(c.get("source"), known)
-                    self.assertIn(c.get("target"), known)
-                if c.get("parent"):
-                    self.assertIn(c.get("parent"), known)
+            pages = list(root.iter("diagram"))
+            self.assertEqual([d.get("name")[:1] for d in pages], ["1", "2", "3"], name)
+            for page in pages:
+                cells = list(page.iter("mxCell"))
+                ids = [c.get("id") for c in cells]
+                self.assertEqual(len(ids), len(set(ids)), f"{name}/{page.get('name')}")
+                known = set(ids)
+                for c in cells:
+                    if c.get("edge"):
+                        self.assertIn(c.get("source"), known)
+                        self.assertIn(c.get("target"), known)
+                    if c.get("parent"):
+                        self.assertIn(c.get("parent"), known)
+
+    def test_level_one_is_simple_and_has_a_story(self):
+        for name, res in self.render_all():
+            ov = overview.build(res.architecture)
+            self.assertLessEqual(len(ov.boxes), 4, name)
+            self.assertGreaterEqual(len(ov.story), 1, name)
+            self.assertEqual([l.step for l in ov.links], list(range(1, len(ov.links) + 1)))
+            page = ET.fromstring(res.xml.split("?>", 1)[1]).find("diagram")
+            self.assertIn("story", {c.get("id") for c in page.iter("mxCell")})
+
+    def test_level_two_shows_plain_role_under_each_icon(self):
+        res = gen(json_spec.load(str(ROOT / "examples/serverless-web.json")))
+        page = list(ET.fromstring(res.xml.split("?>", 1)[1]).iter("diagram"))[1]
+        db = next(c for c in page.iter("mxCell") if c.get("id") == "db")
+        self.assertIn("Base de datos", db.get("value"))
 
     def test_only_verified_icons_are_used(self):
         for name, res in self.render_all():
@@ -152,7 +188,7 @@ class RendererTests(unittest.TestCase):
 
     def test_children_use_relative_coordinates(self):
         res = gen(json_spec.load(str(ROOT / "examples/containers-three-tier.json")))
-        root = ET.fromstring(res.xml.split("?>", 1)[1])
+        root = list(ET.fromstring(res.xml.split("?>", 1)[1]).iter("diagram"))[2]  # level 3 uses groups
         cells = {c.get("id"): c for c in root.iter("mxCell")}
         absolute = {n.component.id: n.rect for n in res.layout.nodes}
         groups = {g.id: g.rect for g in res.layout.groups}

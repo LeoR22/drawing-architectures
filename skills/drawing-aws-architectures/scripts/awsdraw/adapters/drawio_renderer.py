@@ -1,9 +1,16 @@
-"""Renders a Layout as draw.io XML (uncompressed mxfile) using the AWS4 shape library."""
+"""Renders an Architecture as a draw.io file with three pages (tabs), from simple to detailed:
+
+1. Visión general: four plain-language blocks + a numbered story anyone can read aloud.
+2. Servicios AWS: official icons, flat, with the plain-language role under each icon.
+3. Detalle técnico: Cloud / Region / VPC boxes and flow labels.
+"""
 
 from __future__ import annotations
 
 from xml.etree import ElementTree as ET
+from xml.sax.saxutils import escape
 
+from ..domain import capabilities, overview as overview_mod, overview_layout as ovl
 from ..domain.layout import Layout, Rect
 from ..domain.models import Architecture
 
@@ -22,6 +29,10 @@ _GROUP_STYLES = {
     "region": "grIcon=mxgraph.aws4.group_region;strokeColor=#00A4A6;fillColor=none;verticalAlign=top;align=left;spacingLeft=30;fontColor=#147EBA;dashed=1;",
     "vpc": "grIcon=mxgraph.aws4.group_vpc2;strokeColor=#8C4FFF;fillColor=none;verticalAlign=top;align=left;spacingLeft=30;fontColor=#AAB7B8;dashed=0;",
 }
+# fill, stroke per level-1 column (people, entry, logic, data)
+_BLOCK_COLORS = {0: ("#232F3D", "#232F3D", "#FFFFFF"), 1: ("#EFE8FF", "#8C4FFF", "#232F3E"), 2: ("#FFF1E0", "#ED7100", "#232F3E"), 3: ("#F7E6FA", "#C925D1", "#232F3E")}
+_EDGE = "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#232F3E;strokeWidth=2;fontSize=11;fontColor=#232F3E;labelBackgroundColor=#ffffff;"
+SERVICE_PAGE_MARGIN = (40, 110)
 
 
 def node_style(kind: str, shape: str, color: str) -> str:
@@ -30,69 +41,136 @@ def node_style(kind: str, shape: str, color: str) -> str:
     return f"sketch=0;{_COMMON}gradientColor=none;fillColor={color};strokeColor=none;dashed=0;pointerEvents=1;shape=mxgraph.aws4.{shape};"
 
 
+def _cell(root, cid, value, style, parent="1", vertex=True, **extra):
+    attrs = {"id": cid, "value": value, "style": style, "parent": parent}
+    attrs["vertex" if vertex else "edge"] = "1"
+    attrs.update(extra)
+    return ET.SubElement(root, "mxCell", attrs)
+
+
+def _geo(cell, x, y, w, h):
+    ET.SubElement(cell, "mxGeometry", {"x": f"{x:g}", "y": f"{y:g}", "width": f"{w:g}", "height": f"{h:g}", "as": "geometry"})
+
+
+def _page(mxfile, page_id, name, width, height):
+    diagram = ET.SubElement(mxfile, "diagram", {"id": page_id, "name": name})
+    model = ET.SubElement(diagram, "mxGraphModel", {
+        "dx": "1200", "dy": "800", "grid": "1", "gridSize": "10", "guides": "1", "tooltips": "1", "connect": "1",
+        "arrows": "1", "fold": "1", "page": "1", "pageScale": "1", "pageWidth": f"{int(width)}", "pageHeight": f"{int(height)}",
+        "math": "0", "shadow": "0",
+    })
+    root = ET.SubElement(model, "root")
+    ET.SubElement(root, "mxCell", {"id": "0"})
+    ET.SubElement(root, "mxCell", {"id": "1", "parent": "0"})
+    return root
+
+
+def _heading(root, title, subtitle, x, y):
+    _geo(_cell(root, "title", escape(title), "text;html=1;align=left;verticalAlign=middle;fontSize=20;fontStyle=1;fontColor=#232F3E;"), x, y, 900, 30)
+    _geo(_cell(root, "subtitle", escape(subtitle), "text;html=1;align=left;verticalAlign=middle;fontSize=13;fontColor=#687078;"), x, y + 30, 900, 24)
+
+
+def _edge(root, eid, source, target, label, style_extra, forward, same_column_down, over=False):
+    style = _EDGE + style_extra
+    if over:  # skips a column: arch over the top so it never crosses the boxes in between
+        style += "exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;"
+    elif forward:
+        style += "exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;"
+    elif same_column_down is not None:
+        style += (
+            "exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" if same_column_down
+            else "exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;"
+        )
+    edge = _cell(root, eid, escape(label), style, vertex=False, source=source, target=target)
+    ET.SubElement(edge, "mxGeometry", {"relative": "1", "as": "geometry"})
+
+
+def _flow_geometry(column_of, source, target):
+    (c1, y1), (c2, y2) = column_of[source], column_of[target]
+    return c2 > c1, (y2 > y1 if c2 == c1 else None)
+
+
 class DrawioRenderer:
     def render(self, arch: Architecture, layout: Layout) -> str:
         mxfile = ET.Element("mxfile", {"host": "drawio", "agent": "drawing-aws-architectures", "version": "24.0.0"})
-        diagram = ET.SubElement(mxfile, "diagram", {"id": "aws-architecture", "name": arch.title[:60] or "AWS architecture"})
-        model = ET.SubElement(diagram, "mxGraphModel", {
-            "dx": "1200", "dy": "800", "grid": "1", "gridSize": "10", "guides": "1", "tooltips": "1",
-            "connect": "1", "arrows": "1", "fold": "1", "page": "1", "pageScale": "1",
-            "pageWidth": f"{int(layout.width)}", "pageHeight": f"{int(layout.height)}", "math": "0", "shadow": "0",
-        })
-        root = ET.SubElement(model, "root")
-        ET.SubElement(root, "mxCell", {"id": "0"})
-        ET.SubElement(root, "mxCell", {"id": "1", "parent": "0"})
+        ov = overview_mod.build(arch)
+        self._overview_page(mxfile, ov, ovl.compute(ov), arch.title)
+        self._services_page(mxfile, arch, layout)
+        self._technical_page(mxfile, arch, layout)
+        ET.indent(mxfile)
+        return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(mxfile, encoding="unicode") + "\n"
 
-        title = ET.SubElement(root, "mxCell", {
-            "id": "title", "value": arch.title, "parent": "1", "vertex": "1",
-            "style": "text;html=1;align=left;verticalAlign=middle;fontSize=20;fontStyle=1;fontColor=#232F3E;",
-        })
-        ET.SubElement(title, "mxGeometry", {"x": f"{layout.title_at[0]:g}", "y": f"{layout.title_at[1]:g}", "width": "700", "height": "30", "as": "geometry"})
+    # ---- level 1 -------------------------------------------------------------------------
+    def _overview_page(self, mxfile, ov, lay, title):
+        root = _page(mxfile, "level-1", "1 · Visión general", lay.width, lay.height)
+        _heading(root, f"Nivel 1 · Visión general: {title}", "Qué hace el sistema, en palabras simples. Los números siguen la historia de abajo.", *lay.title_at)
+        for box in ov.boxes:
+            fill, stroke, font = _BLOCK_COLORS[box.column]
+            rect = lay.boxes[box.key]
+            bullets = "".join(f"<br>• {escape(i)}" for i in box.items) if box.key != "people" else ""
+            aws = f"<br><font style=\"font-size:10px\" color=\"#687078\">AWS: {escape(', '.join(box.services))}</font>" if box.key != "people" else ""
+            value = (f"<b style=\"font-size:15px\">{escape(box.title)}</b><br><font style=\"font-size:11px\">{escape(box.does)}</font>{bullets}{aws}")
+            style = f"rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor={fill};strokeColor={stroke};strokeWidth=2;fontColor={font};align=left;spacingLeft=12;spacingRight=8;verticalAlign=middle;fontSize=12;"
+            _geo(_cell(root, f"box_{box.key}", value, style), rect.x, rect.y, rect.w, rect.h)
+        columns = {b.key: b.column for b in ov.boxes}
+        for link in ov.links:
+            src, dst = lay.boxes[link.source], lay.boxes[link.target]
+            order = {k: i for i, k in enumerate(sorted(set(columns.values())))}
+            gap = order[columns[link.target]] - order[columns[link.source]]
+            forward = gap > 0
+            same = None if forward else (dst.y > src.y)
+            _edge(root, f"link{link.step}", f"box_{link.source}", f"box_{link.target}", str(link.step),
+                  "labelBackgroundColor=#ED7100;fontColor=#FFFFFF;fontStyle=1;fontSize=13;", forward, same, over=gap > 1)
+        if ov.support and lay.band_label:
+            _geo(_cell(root, "band_label", "Siempre activos: seguridad y operación (protegen y vigilan todo lo anterior)", "text;html=1;align=left;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#232F3E;"), *_xywh(lay.band_label))
+            for b in ov.support:
+                value = f"<b>{escape(b.title)}</b><br><font style=\"font-size:11px\">{escape(b.does)}</font><br><font style=\"font-size:10px\" color=\"#687078\">AWS: {escape(', '.join(b.services))}</font>"
+                style = "rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#F2F3F3;strokeColor=#879196;dashed=1;fontColor=#232F3E;align=left;spacingLeft=10;spacingRight=6;fontSize=12;"
+                _geo(_cell(root, f"chip_{b.key}", value, style), *_xywh(lay.chips[b.key]))
+        lines = "".join(f"<p style=\"margin:4px 0\">{escape(line)}</p>" for line in ov.story)
+        story = f"<b>Cómo explicarlo, paso a paso</b>{lines}"
+        _geo(_cell(root, "story", story, "text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=13;fontColor=#232F3E;fillColor=#FAFAFA;strokeColor=#D5DBDB;spacing=10;"), *_xywh(lay.story))
 
-        origins: dict[str, tuple[float, float]] = {"1": (0, 0)}
-        for g in layout.groups:
-            parent_origin = origins[g.parent]
-            cell = ET.SubElement(root, "mxCell", {
-                "id": g.id, "value": g.label, "parent": g.parent, "vertex": "1",
-                "style": _GROUP_BASE + _POINTS_GROUP + _GROUP_STYLES[g.kind],
-            })
-            ET.SubElement(cell, "mxGeometry", {
-                "x": f"{g.rect.x - parent_origin[0]:g}", "y": f"{g.rect.y - parent_origin[1]:g}",
-                "width": f"{g.rect.w:g}", "height": f"{g.rect.h:g}", "as": "geometry",
-            })
-            origins[g.id] = (g.rect.x, g.rect.y)
-
+    # ---- level 2 -------------------------------------------------------------------------
+    def _services_page(self, mxfile, arch, layout):
+        xs = [n.rect.x for n in layout.nodes]
+        ys = [n.rect.y for n in layout.nodes]
+        dx, dy = SERVICE_PAGE_MARGIN[0] - min(xs), SERVICE_PAGE_MARGIN[1] - min(ys)
+        width = max(xs) + 78 + dx + 60
+        height = max(ys) + 108 + dy + 40
+        root = _page(mxfile, "level-2", "2 · Servicios AWS", width, height)
+        _heading(root, "Nivel 2 · Servicios de AWS", "Qué servicio hace cada parte. Debajo de cada ícono está su función en palabras simples.", 40, 20)
         column_of = {}
         for n in layout.nodes:
             column_of[n.component.id] = (n.column, n.rect.y)
-            parent_origin = origins[n.parent]
-            cell = ET.SubElement(root, "mxCell", {
-                "id": n.component.id, "value": n.component.label or n.service.label, "parent": n.parent, "vertex": "1",
-                "style": node_style(n.service.kind, n.service.shape, n.service.color),
-            })
-            ET.SubElement(cell, "mxGeometry", {
-                "x": f"{n.rect.x - parent_origin[0]:g}", "y": f"{n.rect.y - parent_origin[1]:g}",
-                "width": "78", "height": "78", "as": "geometry",
-            })
+            role = capabilities.of(n.service.key).title
+            label = escape(n.component.label or n.service.label)
+            value = f"{label}<br><font style=\"font-size:10px\" color=\"#687078\">{escape(role)}</font>"
+            _geo(_cell(root, n.component.id, value, node_style(n.service.kind, n.service.shape, n.service.color)), n.rect.x + dx, n.rect.y + dy, 78, 78)
+        self._flows(root, arch, column_of)
 
+    # ---- level 3 -------------------------------------------------------------------------
+    def _technical_page(self, mxfile, arch, layout):
+        root = _page(mxfile, "level-3", "3 · Detalle técnico", layout.width, layout.height)
+        _heading(root, "Nivel 3 · Detalle técnico", f"{arch.title}. Nube, región, red privada (VPC) y flujos. Línea punteada = proceso asíncrono.", *layout.title_at)
+        origins = {"1": (0, 0)}
+        for g in layout.groups:
+            ox, oy = origins[g.parent]
+            _geo(_cell(root, g.id, escape(g.label), _GROUP_BASE + _POINTS_GROUP + _GROUP_STYLES[g.kind], parent=g.parent), g.rect.x - ox, g.rect.y - oy, g.rect.w, g.rect.h)
+            origins[g.id] = (g.rect.x, g.rect.y)
+        column_of = {}
+        for n in layout.nodes:
+            column_of[n.component.id] = (n.column, n.rect.y)
+            ox, oy = origins[n.parent]
+            _geo(_cell(root, n.component.id, escape(n.component.label or n.service.label), node_style(n.service.kind, n.service.shape, n.service.color), parent=n.parent), n.rect.x - ox, n.rect.y - oy, 78, 78)
+        self._flows(root, arch, column_of)
+
+    @staticmethod
+    def _flows(root, arch, column_of):
         for i, f in enumerate(arch.flows, 1):
-            style = "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#232F3E;strokeWidth=2;fontSize=11;fontColor=#232F3E;labelBackgroundColor=#ffffff;"
-            (c1, y1), (c2, y2) = column_of[f.source], column_of[f.target]
-            if c2 > c1:
-                style += "exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;"
-            elif c2 == c1:
-                down = y2 > y1
-                style += (
-                    "exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" if down
-                    else "exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;"
-                )
-            if f.is_async:
-                style += "dashed=1;"
-            edge = ET.SubElement(root, "mxCell", {
-                "id": f"edge{i}", "value": f.label, "style": style, "edge": "1", "parent": "1",
-                "source": f.source, "target": f.target,
-            })
-            ET.SubElement(edge, "mxGeometry", {"relative": "1", "as": "geometry"})
+            forward, down = _flow_geometry(column_of, f.source, f.target)
+            _edge(root, f"edge{i}", f.source, f.target, f.label, "dashed=1;" if f.is_async else "", forward, down)
 
-        ET.indent(mxfile)
-        return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(mxfile, encoding="unicode") + "\n"
+
+def _xywh(rect: Rect):
+    return rect.x, rect.y, rect.w, rect.h

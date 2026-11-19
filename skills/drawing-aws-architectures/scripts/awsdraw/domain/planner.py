@@ -56,7 +56,7 @@ class RulePlanner:
         link = lambda a, b, label="", **kw: flows.append(Flow(a, b, label, **kw))  # noqa: E731
 
         actor = "users" if (web or not mobile) else "mobile"
-        add("actor", actor, "Mobile users" if actor == "mobile" else "Users")
+        add("actor", actor, "Usuarios móviles" if actor == "mobile" else "Usuarios")
         entry_from = "actor"
 
         if domain:
@@ -69,103 +69,103 @@ class RulePlanner:
             entry_from = "cdn"
             if security:
                 add("waf", "waf", "AWS WAF")
-                link("cdn", "waf", "filter")
+                link("cdn", "waf", "filtra")
                 entry_from = "waf"
             if web:
-                add("site", "s3", "Static site (S3)")
-                link("cdn", "site", "static assets")
+                add("site", "s3", "Sitio web (S3)")
+                link("cdn", "site", "archivos del sitio")
         elif security:
             add("waf", "waf", "AWS WAF")
-            link(entry_from, "waf", "filter")
+            link(entry_from, "waf", "filtra")
             entry_from = "waf"
 
         needs_backend = bool(mobile or containers or auth or relational or nosql or queue or genai or ml or files or not web)
         backend = None
         if needs_backend:
             if containers:
-                add("lb", "alb", "Load balancer")
-                add("compute", "fargate", "Containers (Fargate)", vpc=True)
+                add("lb", "alb", "Balanceador de carga")
+                add("compute", "fargate", "Contenedores (Fargate)", vpc=True)
                 link(entry_from, "lb", "HTTPS")
                 link("lb", "compute")
                 backend = "compute"
                 if auth:
                     add("auth", "cognito", "Cognito")
-                    link("compute", "auth", "verify tokens")
+                    link("compute", "auth", "valida identidad")
             else:
                 add("api", "api_gateway", "API Gateway")
-                add("compute", "lambda", "Business logic (Lambda)")
+                add("compute", "lambda", "Lógica del negocio (Lambda)")
                 link(entry_from, "api", "REST/HTTPS")
                 link("api", "compute")
                 backend = "compute"
                 if auth:
                     add("auth", "cognito", "Cognito")
-                    link("api", "auth", "authorize")
+                    link("api", "auth", "valida identidad")
         elif auth:
             add("auth", "cognito", "Cognito")
-            link("actor", "auth", "sign in")
+            link("actor", "auth", "inicia sesión")
 
         if backend:
             if relational:
-                add("db", "aurora", "Aurora (SQL)", vpc=containers)
+                add("db", "aurora", "Base de datos SQL (Aurora)", vpc=containers)
                 link(backend, "db", "SQL")
             elif nosql or not (analytics or streaming):
-                add("db", "dynamodb", "DynamoDB")
-                link(backend, "db", "read/write")
+                add("db", "dynamodb", "Base de datos (DynamoDB)")
+                link(backend, "db", "lee y escribe")
             if cache:
-                add("cache", "elasticache", "ElastiCache", vpc=True)
-                link(backend, "cache", "cache")
+                add("cache", "elasticache", "Caché (ElastiCache)", vpc=True)
+                link(backend, "cache", "caché")
             if files:
-                add("files", "s3", "File storage (S3)")
-                link(backend, "files", "objects")
+                add("files", "s3", "Archivos (S3)")
+                link(backend, "files", "archivos")
             if queue:
-                add("queue", "sqs", "SQS queue")
-                add("worker", "lambda", "Async worker")
-                link(backend, "queue", "enqueue", is_async=True)
+                add("queue", "sqs", "Cola de tareas (SQS)")
+                add("worker", "lambda", "Procesador en segundo plano (Lambda)")
+                link(backend, "queue", "encola", is_async=True)
                 link("queue", "worker", is_async=True)
             if workflow:
-                add("flow", "step_functions", "Step Functions")
-                link(backend, "flow", "orchestrate")
+                add("flow", "step_functions", "Flujo de trabajo (Step Functions)")
+                link(backend, "flow", "coordina")
             if events:
-                add("bus", "eventbridge", "EventBridge")
-                link(backend, "bus", "events", is_async=True)
+                add("bus", "eventbridge", "Eventos (EventBridge)")
+                link(backend, "bus", "eventos", is_async=True)
             if notify:
-                add("notify", "sns", "SNS notifications")
-                link("worker" if queue else backend, "notify", "notify", is_async=True)
+                add("notify", "sns", "Notificaciones (SNS)")
+                link("worker" if queue else backend, "notify", "avisa", is_async=True)
             if search:
-                add("search", "opensearch", "OpenSearch")
-                link(backend, "search", "query")
+                add("search", "opensearch", "Búsqueda (OpenSearch)")
+                link(backend, "search", "busca")
             if genai:
-                add("llm", "bedrock", "Amazon Bedrock")
-                link(backend, "llm", "prompt")
+                add("llm", "bedrock", "IA generativa (Bedrock)")
+                link(backend, "llm", "consulta")
             if ml:
-                add("ml", "sagemaker", "SageMaker endpoint")
-                link(backend, "ml", "inference")
+                add("ml", "sagemaker", "Modelo de ML (SageMaker)")
+                link(backend, "ml", "predice")
 
         if streaming:
-            add("stream", "kinesis", "Kinesis")
+            add("stream", "kinesis", "Datos en tiempo real (Kinesis)")
             add("lake", "s3", "Data lake (S3)")
-            link("actor", "stream", "events")
-            link("stream", "lake", "deliver", is_async=True)
+            link("actor", "stream", "eventos")
+            link("stream", "lake", "entrega", is_async=True)
         if analytics:
             source = next((c.id for c in comps if c.id in ("lake", "files", "db")), None)
             if source is None:
                 add("lake", "s3", "Data lake (S3)")
                 source = "lake"
-            add("etl", "glue", "Glue ETL")
-            add("query", "athena", "Athena")
-            add("bi", "quicksight", "QuickSight")
-            link(source, "etl", "catalog/ETL")
+            add("etl", "glue", "Preparación de datos (Glue)")
+            add("query", "athena", "Consultas SQL (Athena)")
+            add("bi", "quicksight", "Dashboards (QuickSight)")
+            link(source, "etl", "prepara datos")
             link("etl", "query")
             link("query", "bi", "dashboards")
 
         if monitor or len(comps) > 3:
-            add("monitor", "cloudwatch", "CloudWatch")
+            add("monitor", "cloudwatch", "Monitoreo (CloudWatch)")
         if audit:
-            add("audit", "cloudtrail", "CloudTrail")
+            add("audit", "cloudtrail", "Auditoría (CloudTrail)")
         if security or auth or relational:
-            add("kms", "kms", "KMS encryption")
+            add("kms", "kms", "Cifrado (KMS)")
         if secrets:
-            add("secrets", "secrets_manager", "Secrets Manager")
+            add("secrets", "secrets_manager", "Secretos (Secrets Manager)")
 
         if len(comps) <= 1:  # nothing recognisable: give a sensible serverless baseline
             return RulePlanner._baseline(title)
