@@ -18,6 +18,7 @@ Agent Skill que convierte los **requisitos de un proyecto** (texto, PDF, Word o 
 3. [Instalación paso a paso en VS Code](#3-instalación-paso-a-paso-en-vs-code)
 4. [Formas de usarla](#4-formas-de-usarla)
 5. [Interfaz web local](#5-interfaz-web-local)
+   - [Versión web sin instalar nada (GitHub Pages)](#versión-web-sin-instalar-nada-github-pages)
 6. [Formato del spec JSON](#6-formato-del-spec-json)
 7. [Catálogo de servicios](#7-catálogo-de-servicios)
 8. [Cómo se dibuja el diagrama](#8-cómo-se-dibuja-el-diagrama)
@@ -145,6 +146,27 @@ Para Anthropic: `$env:ANTHROPIC_API_KEY="sk-ant-..."` (opcional `ANTHROPIC_MODEL
 
 La vista previa es simplificada (cuadros de colores). El archivo `.drawio` sí trae los íconos oficiales.
 
+### Versión web sin instalar nada (GitHub Pages)
+
+La misma interfaz funciona **directamente en el navegador**, sin Python ni servidor: https://leor22.github.io/drawing-architectures/
+
+Cómo funciona: la página descarga [Pyodide](https://pyodide.org) (Python compilado a WebAssembly) y ejecuta en tu navegador **el mismo código** de la skill (`awsdraw`): planificador, validación, layout y generación del `.drawio`. Tus archivos se procesan en tu equipo y no se suben a ningún servidor.
+
+| Aspecto | Versión web | Versión local (`ui`) |
+|---|---|---|
+| Instalación | ninguna | Python + clonar el repo |
+| Offline (texto, Word) | sí | sí |
+| PDF | sí (instala `pypdf` en el navegador la primera vez, requiere conexión) | sí |
+| Modos con IA | sí: pegas tu token en la página (solo en memoria de la pestaña) | sí: token por variable de entorno |
+| Guardar y abrir en VS Code | no; usa **Descargar .drawio** y ábrelo en VS Code | sí |
+| Primera carga | unos segundos (descarga el motor, ~10 MB, luego queda en caché) | inmediata |
+
+Limitaciones: el navegador puede bloquear la llamada directa al proveedor de IA por CORS; si ocurre, la página lo indica y debes usar la versión local o el agente de VS Code. Anthropic permite llamadas desde el navegador con una cabecera especial que la página envía; en GitHub Models no está garantizado. Un token pegado en una página web es sensible: usa uno de permisos mínimos (*Models: read*), con vencimiento corto, y no lo compartas.
+
+**Publicarla en tu cuenta (una sola vez):** en el repo, Settings → Pages → *Build and deployment* → Source: **Deploy from a branch** → Branch: `main` y carpeta `/docs` → Save. En un par de minutos queda en `https://<tu-usuario>.github.io/drawing-architectures/`.
+
+**Actualizar la web tras cambiar el código:** `python skills/drawing-aws-architectures/scripts/build_web.py` y haz commit de la carpeta `docs/`. Un test falla si `docs/` quedó desactualizado.
+
 ## 6. Formato del spec JSON
 
 ```json
@@ -242,9 +264,11 @@ scripts/awsdraw/
   application/              casos de uso y puertos (interfaces)
     ports.py  use_cases.py  (GenerateDiagram, PlanAndGenerate, SaveDiagram, CollectRequirements)
   adapters/                 detalles externos
-    drawio_renderer.py  json_spec.py  svg_preview.py  fs_writer.py  vscode_opener.py
+    drawio_renderer.py  json_spec.py  svg_preview.py  ui_response.py  fs_writer.py  vscode_opener.py
     fs_installer.py  readers.py + docx/pdf/text/image  llm_anthropic.py  web_ui.py  ui_page.html
-  cli.py                    raíz de composición: único lugar que conecta adaptadores con casos de uso
+  cli.py                    raíz de composición (terminal y servidor local)
+  web_entry.py              raíz de composición del navegador (Pyodide)
+scripts/build_web.py        genera docs/ (index.html + awsdraw.zip) para GitHub Pages
 reference/  examples/  tests/
 ```
 
@@ -263,7 +287,7 @@ Regla de dependencia: `domain` no importa nada de `application` ni `adapters`; `
 python -m unittest discover -s tests
 ```
 
-43 pruebas: catálogo contra la biblioteca real de draw.io, reglas, que los nodos no se solapen, que la caja VPC contenga solo nodos VPC, XML bien formado con ids únicos y aristas válidas, escapado de caracteres, planificador, planificadores IA (Anthropic y GitHub Models) con respuestas simuladas, servidor web (Host/Origin, subidas, guardado), instalador, regla de dependencias y revisión de `SKILL.md`. También hay una prueba de presupuesto de tiempo (<1 s).
+47 pruebas: catálogo contra la biblioteca real de draw.io, reglas, que los nodos no se solapen, que la caja VPC contenga solo nodos VPC, XML bien formado con ids únicos y aristas válidas, escapado de caracteres, planificador, planificadores IA (Anthropic y GitHub Models) con respuestas simuladas, servidor web (Host/Origin, subidas, guardado), instalador, regla de dependencias, que `docs/` esté al día con el código y revisión de `SKILL.md`. También hay una prueba de presupuesto de tiempo (<1 s).
 
 ## 14. Solución de problemas
 

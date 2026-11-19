@@ -448,6 +448,39 @@ class ArchitectureTests(unittest.TestCase):
                 self.assertFalse(banned & set(names), f"{path.name} imports {banned & set(names)}")
 
 
+class WebBuildTests(unittest.TestCase):
+    def setUp(self):
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import build_web
+        self.build = build_web
+
+    def test_zip_has_engine_and_no_os_bound_modules(self):
+        import io
+        import zipfile
+        names = zipfile.ZipFile(io.BytesIO(self.build.package_zip())).namelist()
+        self.assertIn("awsdraw/web_entry.py", names)
+        self.assertIn("awsdraw/__init__.py", names)
+        for banned in ("cli.py", "web_ui.py", "fs_installer.py", "llm_github.py", "llm_anthropic.py", "vscode_opener.py"):
+            self.assertFalse([n for n in names if n.endswith(banned)], banned)
+
+    def test_zip_is_deterministic(self):
+        self.assertEqual(self.build.package_zip(), self.build.package_zip())
+
+    def test_page_is_in_web_mode_without_placeholders(self):
+        html = self.build.page_html()
+        self.assertIn("const PROV=null", html)
+        self.assertNotIn("__PROVIDERS__", html)
+        self.assertNotIn("__PYODIDE_VERSION__", html)
+        self.assertIn(f"pyodide/v{self.build.PYODIDE_VERSION}/full/pyodide.js", html)
+
+    def test_published_docs_are_up_to_date(self):
+        docs = ROOT.parents[1] / "docs"
+        if not docs.is_dir():
+            self.skipTest("docs/ not present (skill used outside the repository)")
+        self.assertEqual((docs / "awsdraw.zip").read_bytes(), self.build.package_zip(), "run: python scripts/build_web.py")
+        self.assertEqual((docs / "index.html").read_text(encoding="utf-8"), self.build.page_html(), "run: python scripts/build_web.py")
+
+
 class SkillLintTests(unittest.TestCase):
     def test_skill_md(self):
         text = (ROOT / "SKILL.md").read_text()

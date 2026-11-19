@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arquitectura AWS → draw.io</title>
+<style>
+:root{color-scheme:light dark;--b:#232F3E;--o:#ED7100}
+body{font:15px system-ui,sans-serif;margin:0;background:#f4f5f7;color:#1b2430}
+header{background:var(--b);color:#fff;padding:14px 24px}header b{color:var(--o)}
+main{max-width:1100px;margin:20px auto;padding:0 16px;display:grid;gap:16px}
+section{background:#fff;border-radius:10px;padding:16px;box-shadow:0 1px 3px #0002}
+textarea{width:100%;min-height:140px;box-sizing:border-box;font:inherit;padding:10px;border:1px solid #bbb;border-radius:6px}
+button{background:var(--o);color:#fff;border:0;border-radius:6px;padding:10px 18px;font-size:15px;cursor:pointer}
+button.alt{background:var(--b)}button:disabled{opacity:.5;cursor:wait}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:10px}
+#preview svg{width:100%;height:auto;background:#fff;border:1px solid #ddd;border-radius:6px}
+.note{color:#555;font-size:13px}.err{color:#b00020;font-weight:600}.warn{color:#8a5a00}
+ul{margin:6px 0 0 18px;padding:0}
+</style></head><body>
+<header><b>AWS</b> · Arquitectura de alto nivel → <code>.drawio</code> <span class="note" style="color:#cbd" id="where">(tus datos no salen del equipo en modo offline)</span></header>
+<main>
+<section>
+<label for="t"><b>Caso de uso / requisitos</b></label>
+<textarea id="t" placeholder="Ej: Portal web con login, base de datos relacional, colas para correos, archivos e imágenes, WAF…"></textarea>
+<div class="row">
+<input id="f" type="file" multiple accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg,.gif,.webp">
+<label>Modo <select id="m"><option value="offline">Offline (reglas, instantáneo)</option><option value="github" id="opt-github">Con IA · GitHub Models (GITHUB_MODELS_TOKEN)</option><option value="anthropic" id="opt-anthropic">Con IA · Anthropic (ANTHROPIC_API_KEY)</option></select></label>
+<button id="go">Generar arquitectura</button>
+</div>
+<div class="row" id="tokrow" hidden><label>Token / clave <input id="tok" type="password" size="40" autocomplete="off" placeholder="github_pat_… o sk-ant-…"></label><span class="note">Solo se guarda en memoria de esta pestaña y se envía únicamente al proveedor elegido.</span></div>
+<p class="note" id="hint"></p>
+<p id="msg"></p>
+</section>
+<section id="out" hidden>
+<div class="row"><b id="ttl"></b><span class="note" id="meta"></span></div>
+<div id="preview"></div>
+<p class="note">Vista previa simplificada. El archivo <code>.drawio</code> trae los íconos oficiales de AWS.</p>
+<div class="row"><button id="dl" class="alt">Descargar .drawio</button><button id="sv">Guardar y abrir en VS Code</button><span id="sres" class="note"></span></div>
+<div id="warns"></div>
+<details><summary>Componentes</summary><ul id="comps"></ul></details>
+</section>
+</main>
+<script>
+const PROV=null, WEB=PROV===null, $=id=>document.getElementById(id); let last=null;
+const b64=f=>new Promise((ok,ko)=>{const r=new FileReader();r.onload=()=>ok(r.result.split(',')[1]);r.onerror=ko;r.readAsDataURL(f)});
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function post(u,b){const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});const j=await r.json();if(!r.ok)throw new Error(j.error||r.status);return j}
+const IMG=/\.(png|jpe?g|gif|webp)$/i;
+/* ---------- engine: local server ---------- */
+const localEngine={
+  async generate(text,mode,files){return post('/api/generate',{text,mode,files:await Promise.all(files.map(async f=>({name:f.name,data:await b64(f)})))})},
+  async save(j){return post('/api/save',{xml:j.xml,filename:j.filename})}
+};
+/* ---------- engine: in the browser (Pyodide runs the same Python code) ---------- */
+let pyP=null;
+function loadPy(){
+  if(pyP)return pyP;
+  pyP=(async()=>{
+    $('msg').textContent='Cargando el motor (Python en el navegador, solo la primera vez)…';
+    await new Promise((ok,ko)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/pyodide/v0.29.5/full/pyodide.js';s.onload=ok;s.onerror=()=>ko(new Error('No se pudo cargar Pyodide desde la CDN. Revisa tu conexión o usa la versión local.'));document.head.appendChild(s)});
+    const py=await loadPyodide();
+    py.unpackArchive(await (await fetch('awsdraw.zip')).arrayBuffer(),'zip',{extractDir:'/app'});
+    py.runPython("import sys; sys.path.insert(0,'/app')");
+    py.FS.mkdirTree('/tmp/up');
+    $('msg').textContent='';
+    return {py,mod:py.pyimport('awsdraw.web_entry')};
+  })();
+  pyP.catch(()=>{pyP=null});
+  return pyP;
+}
+const call=(r)=>{const j=JSON.parse(r);if(j.error)throw new Error(j.error);return j};
+async function askModel(provider,token,system,text,images){
+  const body=text||'(ver imágenes)';
+  if(provider==='anthropic'){
+    const content=images.map(i=>({type:'image',source:{type:'base64',media_type:i.type,data:i.data}}));content.push({type:'text',text:'Use case:\n'+body.slice(0,20000)});
+    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':token,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-5-5',max_tokens:2000,system,messages:[{role:'user',content}]})});
+    if(!r.ok)throw new Error('Anthropic respondió HTTP '+r.status+' (revisa la clave).');
+    return (await r.json()).content.filter(b=>b.type==='text').map(b=>b.text).join('');
+  }
+  const content=images.map(i=>({type:'image_url',image_url:{url:`data:${i.type};base64,${i.data}`}}));content.push({type:'text',text:'Use case:\n'+body.slice(0,20000)});
+  const r=await fetch('https://models.github.ai/inference/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/vnd.github+json','Authorization':'Bearer '+token,'X-GitHub-Api-Version':'2022-11-28'},body:JSON.stringify({model:'openai/gpt-4.1',max_tokens:2000,temperature:0.2,messages:[{role:'system',content:system},{role:'user',content}]})});
+  if(!r.ok)throw new Error('GitHub Models respondió HTTP '+r.status+(r.status===429?' (límite alcanzado)':' (revisa el token y el permiso Models: read)')+'.');
+  return (await r.json()).choices[0].message.content||'';
+}
+const webEngine={
+  async generate(text,mode,files){
+    const {py,mod}=await loadPy();
+    const paths=[],images=[],warnings=[];
+    for(const [i,f] of files.entries()){
+      if(IMG.test(f.name)){images.push({type:f.type||'image/png',data:await b64(f),name:f.name});continue}
+      if(/\.pdf$/i.test(f.name)&&!py.pyimport('importlib.util').find_spec('pypdf')){
+        $('msg').textContent='Instalando lector de PDF…';await py.loadPackage('micropip');await py.pyimport('micropip').install('pypdf');$('msg').textContent='';
+      }
+      const p='/tmp/up/'+i+'_'+f.name.replace(/[^A-Za-z0-9._-]/g,'_');py.FS.writeFile(p,new Uint8Array(await f.arrayBuffer()));paths.push(p);
+    }
+    const c=(text.trim()||paths.length)?call(mod.collect(text,JSON.stringify(paths))):{text:'',warnings:[]};
+    warnings.push(...c.warnings);
+    if(!c.text.trim()&&!images.length)throw new Error('Escribe el caso de uso o adjunta un PDF, Word, texto o imagen.');
+    if(mode==='offline'){
+      if(!c.text.trim())throw new Error('Las imágenes necesitan un modo con IA: elige GitHub Models o Anthropic y pega tu token, o describe las imágenes en texto.');
+      if(images.length)warnings.push('El modo offline ignora las imágenes; solo se usó el texto.');
+      return call(mod.plan_offline(c.text,JSON.stringify(warnings)));
+    }
+    const token=$('tok').value.trim();if(!token)throw new Error('Pega tu token/clave para usar el modo con IA.');
+    let reply;
+    try{reply=await askModel(mode,token,mod.ai_system_prompt(),c.text,images)}
+    catch(e){
+      if(e instanceof TypeError)throw new Error('El navegador bloqueó la llamada al proveedor (CORS o sin conexión). Usa la versión local (python scripts/run.py ui) o el agente de VS Code.');
+      throw e;
+    }
+    return call(mod.finish_ai(reply,c.text,mode,JSON.stringify(warnings)));
+  },
+  async save(){throw new Error('Guardar en disco no está disponible en la web: usa «Descargar .drawio».')}
+};
+const engine=WEB?webEngine:localEngine;
+/* ---------- UI ---------- */
+if(WEB){
+  $('where').textContent='(versión web: el análisis corre en tu navegador; los archivos no se suben a ningún servidor)';
+  $('sv').hidden=true;
+  $('m').onchange=()=>{$('tokrow').hidden=$('m').value==='offline'};
+}else{
+  for(const k of ['github','anthropic']){if(!PROV.includes(k))$('opt-'+k).disabled=true}
+  if(PROV.length){$('m').value=PROV[0]}else{$('hint').textContent='Modo IA desactivado: define GITHUB_MODELS_TOKEN o ANTHROPIC_API_KEY antes de iniciar la UI. Sin IA no se interpretan imágenes.'}
+}
+$('go').onclick=async()=>{
+ $('msg').textContent='';$('go').disabled=true;const t0=performance.now();
+ try{
+  const j=await engine.generate($('t').value,$('m').value,[...$('f').files]);
+  last=j;$('out').hidden=false;$('ttl').textContent=j.title;
+  $('meta').textContent=`${j.components.length} componentes · planner: ${j.planner} · ${((performance.now()-t0)/1000).toFixed(1)} s`;
+  $('preview').innerHTML=j.svg;$('sres').textContent='';
+  $('warns').innerHTML=j.warnings.map(w=>`<p class="warn">⚠ ${esc(w)}</p>`).join('');
+  $('comps').innerHTML=j.components.map(c=>`<li><b>${esc(c.label)}</b> <span class="note">(${esc(c.service)})</span></li>`).join('');
+ }catch(e){$('msg').innerHTML=`<span class="err">${esc(e.message)}</span>`}
+ $('go').disabled=false};
+$('dl').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([last.xml],{type:'application/xml'}));a.download=last.filename;a.click()};
+$('sv').onclick=async()=>{try{const j=await engine.save(last);$('sres').textContent=(j.opened?'Abierto en VS Code: ':'Guardado (no se encontró el comando "code"): ')+j.path}catch(e){$('sres').innerHTML=`<span class="err">${esc(e.message)}</span>`}};
+</script></body></html>

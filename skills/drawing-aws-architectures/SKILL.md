@@ -68,7 +68,7 @@ For non-agent use (paste or upload a use case, preview, download):
 ```
 python SKILL_DIR/scripts/run.py ui --browser
 ```
-Runs on 127.0.0.1 only. Offline mode reads text, PDF and Word with keyword rules. Setting `GITHUB_MODELS_TOKEN` (GitHub Models) or `ANTHROPIC_API_KEY` enables an AI mode (better interpretation, reads images); the use case is then sent to that provider. Details: [reference/ui.md](reference/ui.md).
+Runs on 127.0.0.1 only. Offline mode reads text, PDF and Word with keyword rules. Setting `GITHUB_MODELS_TOKEN` (GitHub Models) or `ANTHROPIC_API_KEY` enables an AI mode (better interpretation, reads images); the use case is then sent to that provider. A browser-only build (no Python needed) is published from `docs/` with GitHub Pages. Details: [reference/ui.md](reference/ui.md).
 
 ## Install for VS Code
 

@@ -8,12 +8,13 @@ import sys
 import time
 from pathlib import Path
 
-from .adapters import json_spec, readers, svg_preview
+from .adapters import json_spec, readers
 from .adapters.drawio_renderer import DrawioRenderer
 from .adapters.fs_installer import EXTENSION_ID, FsInstaller
 from .adapters.fs_writer import FsWriter
 from .adapters.llm_anthropic import AnthropicPlanner
 from .adapters.llm_github import GithubModelsPlanner
+from .adapters.ui_response import to_response
 from .adapters.vscode_opener import VsCodeOpener
 from .application.use_cases import CollectRequirements, GenerateDiagram, PlanAndGenerate, SaveDiagram
 from .domain import catalog
@@ -109,14 +110,7 @@ def cmd_ui(args) -> int:
             if req.images:
                 warnings.append("Offline mode ignores images; only the text was used.")
             result = PlanAndGenerate(rule, generate)(Requirements(req.text))
-        name = "".join(ch if ch.isalnum() else "-" for ch in result.architecture.title.lower()).strip("-")[:40] or "architecture"
-        return {
-            "title": result.architecture.title, "planner": used, "filename": f"{name}.drawio",
-            "xml": result.xml, "svg": svg_preview.render(result.architecture, result.layout),
-            "components": [{"id": c.id, "service": c.service, "label": c.label} for c in result.architecture.components],
-            "warnings": warnings + [f"{f.code}: {f.message}" for f in result.findings],
-            "seconds": round(time.perf_counter() - started, 2),
-        }
+        return to_response(result, used, warnings, started)
 
     def save(xml: str, filename: str) -> tuple[str, bool]:
         if not xml.startswith("<?xml") or "<mxfile" not in xml[:400] or len(xml) > 5_000_000:

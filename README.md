@@ -18,11 +18,16 @@ python scripts/run.py plan "Portal web con login, base de datos SQL y colas" -o 
 
 La guía completa (instalación en VS Code, interfaz web local, formato del spec, arquitectura del código) está en [`skills/drawing-aws-architectures/README.md`](skills/drawing-aws-architectures/README.md).
 
+## Versión web (sin instalar nada)
+
+https://leor22.github.io/drawing-architectures/ — la misma interfaz corriendo en tu navegador (Pyodide). Detalles y cómo publicarla en la guía de la skill.
+
 ## Estructura
 
 ```
 skills/
   drawing-aws-architectures/   SKILL.md, scripts/, reference/, examples/, tests/
+docs/                          sitio estático (GitHub Pages), generado con scripts/build_web.py
 ```
 
 Para instalar una skill en un proyecto de VS Code, ejecuta desde su carpeta:
