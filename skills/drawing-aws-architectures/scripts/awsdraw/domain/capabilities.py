@@ -54,7 +54,7 @@ _OF = {
     "workflow": ("sqs", "eventbridge", "step_functions", "appflow"),
     "notify": ("sns",),
     "stream": ("kinesis", "msk", "firehose"),
-    "ai": ("bedrock", "sagemaker"),
+    "ai": ("bedrock", "agentcore", "sagemaker"),
     "files": ("s3", "efs", "ebs"),
     "database": ("aurora", "rds", "dynamodb", "redshift", "dms"),
     "cache": ("elasticache",),

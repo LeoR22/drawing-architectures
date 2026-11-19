@@ -67,6 +67,7 @@ _SERVICES = (
     _s("emr", "EMR", "emr", NETWORK, "app"),
     _s("sagemaker", "SageMaker", "sagemaker", AI, "app"),
     _s("bedrock", "Bedrock", "bedrock", AI, "app"),
+    _s("agentcore", "Bedrock AgentCore", "bedrock_agentcore", AI, "app"),
     # data
     _s("s3", "S3", "s3", STORAGE, "data"),
     _s("efs", "EFS", "elastic_file_system", STORAGE, "data"),

@@ -14,7 +14,7 @@ def parse(data: object) -> Architecture:
         raise SpecError("The spec must be a JSON object with 'components' and 'flows'.")
     try:
         comps = tuple(
-            Component(str(c["id"]), str(c["service"]), str(c.get("label") or ""), c.get("tier"), bool(c.get("vpc", False)))
+            Component(str(c["id"]), str(c["service"]), str(c.get("label") or ""), c.get("tier"), bool(c.get("vpc", False)), c.get("role"))
             for c in data.get("components", [])
         )
         flows = tuple(
@@ -25,7 +25,7 @@ def parse(data: object) -> Architecture:
         raise SpecError(f"Malformed spec: each component needs 'id' and 'service'; each flow needs 'from' and 'to' ({exc}).") from None
     return Architecture(
         str(data.get("title") or "AWS high-level architecture"), comps, flows,
-        str(data.get("region") or "us-east-1"), bool(data.get("multi_az", False)),
+        str(data.get("region") or "us-east-1"), bool(data.get("multi_az", False)), data.get("profile"),
     )
 
 

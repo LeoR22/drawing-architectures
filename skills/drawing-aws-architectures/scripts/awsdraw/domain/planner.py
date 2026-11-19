@@ -7,6 +7,8 @@ can replace it for richer interpretation.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import re
 import unicodedata
 
@@ -34,7 +36,9 @@ class RulePlanner:
         streaming = _has(t, r"streaming", r"tiempo real", r"real.time", r"kafka", r"\biot\b", r"telemetr", r"sensor")
         analytics = _has(t, r"analitic", r"analytic", r"data lake", r"datalake", r"\bbi\b", r"reporte", r"dashboard", r"business intelligence", r"big data")
         genai = _has(t, r"\bia\b", r"\bai\b", r"genai", r"llm", r"chatbot", r"\brag\b", r"generativ", r"bedrock", r"asistente")
+        agent = _has(t, r"\bagente", r"\bagent", r"agentic", r"agentico", r"\bmcp\b", r"multi.?agente", r"multi.?agent", r"herramientas del agente", r"tool.?use", r"function calling")
         ml = _has(t, r"machine learning", r"\bml\b", r"modelo predictiv", r"entrenar", r"sagemaker")
+        genai = genai or agent
         files = _has(t, r"archivo", r"\bfile", r"imagen", r"image", r"upload", r"subir", r"documento", r"almacen", r"storage", r"video", r"adjunto")
         queue = _has(t, r"cola\b", r"colas", r"queue", r"asincron", r"async", r"mensajer", r"background", r"segundo plano", r"batch")
         notify = _has(t, r"notificacion", r"notification", r"email", r"correo", r"\bsms\b", r"push", r"alerta")
@@ -137,6 +141,14 @@ class RulePlanner:
             if genai:
                 add("llm", "bedrock", "IA generativa (Bedrock)")
                 link(backend, "llm", "consulta")
+            if agent:
+                add("tools", "lambda", "Herramientas del agente (MCP)")
+                link(backend, "tools", "usa herramientas")
+                add("memory", "dynamodb", "Memoria de la conversación (DynamoDB)", role="memory_short")
+                link(backend, "memory", "recuerda")
+                if search or _has(t, r"\brag\b", r"conocimiento", r"knowledge", r"documento", r"memoria de largo"):
+                    add("knowledge", "opensearch", "Conocimiento (OpenSearch)", role="memory_long")
+                    link(backend, "knowledge", "consulta")
             if ml:
                 add("ml", "sagemaker", "Modelo de ML (SageMaker)")
                 link(backend, "ml", "predice")
@@ -167,9 +179,12 @@ class RulePlanner:
         if secrets:
             add("secrets", "secrets_manager", "Secretos (Secrets Manager)")
 
+        if agent:
+            comps = [replace(c, role="agent") if c.id == backend else c for c in comps]
+
         if len(comps) <= 1:  # nothing recognisable: give a sensible serverless baseline
             return RulePlanner._baseline(title)
-        return Architecture(title, tuple(comps), tuple(flows), multi_az=containers or relational)
+        return Architecture(title, tuple(comps), tuple(flows), multi_az=containers or relational, profile="agents" if agent else None)
 
     @staticmethod
     def _title(text: str) -> str:

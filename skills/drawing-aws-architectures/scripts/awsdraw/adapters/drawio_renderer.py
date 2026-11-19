@@ -11,7 +11,7 @@ from __future__ import annotations
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
 
-from ..domain import capabilities, overview as overview_mod, overview_layout as ovl, system_design
+from ..domain import agents, agents_layout, capabilities, overview as overview_mod, overview_layout as ovl, system_design
 from ..domain.layout import Layout, Rect, skips_over
 from ..domain.models import Architecture
 
@@ -105,7 +105,10 @@ class DrawioRenderer:
     def render(self, arch: Architecture, layout: Layout) -> str:
         mxfile = ET.Element("mxfile", {"host": "drawio", "agent": "drawing-aws-architectures", "version": "24.0.0"})
         ov = overview_mod.build(arch)
-        self._system_design_page(mxfile, arch, layout)
+        if agents.is_agentic(arch):
+            self._agents_page(mxfile, arch)
+        else:
+            self._system_design_page(mxfile, arch, layout)
         self._overview_page(mxfile, ov, ovl.compute(ov), arch.title)
         self._services_page(mxfile, arch, layout)
         self._technical_page(mxfile, arch, layout)
@@ -134,6 +137,26 @@ class DrawioRenderer:
         legend = ("<b>Cómo leerlo:</b> figura humana = quien usa el sistema · hexágono = punto de entrada o control · nube = red de entrega · "
                   "rectángulo = servicio · cilindro = datos · rectángulo con barras = cola o flujo de mensajes · gris punteado = apoyo (seguridad, monitoreo) · línea punteada = proceso asíncrono.")
         _geo(_cell(root, "legend", legend, "text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=12;fontColor=#232F3E;fillColor=#FAFAFA;strokeColor=#D5DBDB;spacing=8;"), 40, height - 80, max(width - 80, 400), 60)
+
+    # ---- level 1 (agent profile): zones of an agentic system -------------------------------
+    def _agents_page(self, mxfile, arch):
+        lay = agents_layout.compute(agents.classify(arch))
+        root = _page(mxfile, "level-1", "1 · System design", lay.width, lay.height)
+        _heading(root, f"Nivel 1 · System design (agentes): {arch.title}", "Usuarios, agente, memoria, herramientas y modelo, sin nombres de servicios: sirve para cualquier nube.", 30, 14)
+        for z in lay.zones:
+            dashed = "dashed=1;" if z.id == "z_support" else ""
+            style = f"rounded=1;arcSize=4;html=1;whiteSpace=wrap;verticalAlign=top;align=left;spacingLeft=10;fontStyle=1;fontSize=12;fontColor=#232F3E;fillColor={z.fill};strokeColor={z.stroke};strokeWidth=2;{dashed}"
+            _geo(_cell(root, z.id, escape(z.title), style), z.rect.x, z.rect.y, z.rect.w, z.rect.h)
+        for it in lay.items:
+            note = f"<br><font style='font-size:10px' color='#687078'>{escape(it.note)}</font>" if it.note else ""
+            dashed = "dashed=1;" if it.dashed else ""
+            style = f"rounded=1;html=1;whiteSpace=wrap;fontSize=12;fontColor=#232F3E;fillColor={it.fill or '#FFFFFF'};strokeColor={it.stroke or '#9AA5AE'};strokeWidth=2;{dashed}"
+            _geo(_cell(root, it.id, escape(it.label) + note, style), it.rect.x, it.rect.y, it.rect.w, it.rect.h)
+        for a in lay.arrows:
+            style = (_EDGE + ("startArrow=classic;startFill=1;" if a.both else "") + ("dashed=1;" if a.dashed else "")
+                     + f"exitX={a.exit[0]};exitY={a.exit[1]};exitDx=0;exitDy=0;entryX={a.entry[0]};entryY={a.entry[1]};entryDx=0;entryDy=0;")
+            edge = _cell(root, a.id, escape(a.label), style, vertex=False, source=a.source, target=a.target)
+            ET.SubElement(edge, "mxGeometry", {"relative": "1", "as": "geometry"})
 
     # ---- level 2 -------------------------------------------------------------------------
     def _overview_page(self, mxfile, ov, lay, title):
@@ -166,7 +189,7 @@ class DrawioRenderer:
         story = f"<b>Cómo explicarlo, paso a paso</b>{lines}"
         _geo(_cell(root, "story", story, "text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=13;fontColor=#232F3E;fillColor=#FAFAFA;strokeColor=#D5DBDB;spacing=10;"), *_xywh(lay.story))
 
-    # ---- level 2 -------------------------------------------------------------------------
+    # ---- level 3 -------------------------------------------------------------------------
     def _services_page(self, mxfile, arch, layout):
         xs = [n.rect.x for n in layout.nodes]
         ys = [n.rect.y for n in layout.nodes]

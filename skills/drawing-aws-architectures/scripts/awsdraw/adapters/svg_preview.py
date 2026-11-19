@@ -175,3 +175,40 @@ def render_system_design(arch: Architecture, layout: Layout) -> str:
             out.append(f'<text x="{cx:g}" y="{ty + i * 14:g}" text-anchor="middle" font-size="12" fill="#232F3E">{escape(line)}</text>')
     out.append("</svg>")
     return "\n".join(out)
+
+
+def render_agents(arch: Architecture) -> str:
+    from ..domain import agents, agents_layout
+
+    lay = agents_layout.compute(agents.classify(arch))
+    rects = {z.id: z.rect for z in lay.zones} | {i.id: i.rect for i in lay.items}
+    out = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {lay.width:g} {lay.height:g}" font-family="Arial,sans-serif">',
+        '<defs><marker id="c" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" fill="#232F3E"/></marker></defs>',
+        f'<text x="30" y="26" font-size="18" font-weight="bold" fill="#232F3E">{escape(arch.title[:70])}</text>',
+    ]
+    for z in lay.zones:
+        r = z.rect
+        out.append(f'<rect x="{r.x:g}" y="{r.y:g}" width="{r.w:g}" height="{r.h:g}" rx="8" fill="{z.fill}" stroke="{z.stroke}" stroke-width="2"/>')
+        out.append(f'<text x="{r.x + 10:g}" y="{r.y + 20:g}" font-size="12" font-weight="bold" fill="#232F3E">{escape(z.title)}</text>')
+    for a in lay.arrows:
+        s_, t_ = rects[a.source], rects[a.target]
+        x1, y1 = s_.x + s_.w * a.exit[0], s_.y + s_.h * a.exit[1]
+        x2, y2 = t_.x + t_.w * a.entry[0], t_.y + t_.h * a.entry[1]
+        dash = ' stroke-dasharray="6 4"' if a.dashed else ""
+        start = ' marker-start="url(#c)"' if a.both else ""
+        out.append(f'<line x1="{x1:g}" y1="{y1:g}" x2="{x2:g}" y2="{y2:g}" stroke="#232F3E" stroke-width="2"{dash}{start} marker-end="url(#c)"/>')
+        if a.label:
+            out.append(f'<text x="{(x1 + x2) / 2 + 6:g}" y="{(y1 + y2) / 2:g}" font-size="11" fill="#687078">{escape(a.label)}</text>')
+    for it in lay.items:
+        r = it.rect
+        dash = ' stroke-dasharray="5 3"' if it.dashed else ""
+        out.append(f'<rect x="{r.x:g}" y="{r.y:g}" width="{r.w:g}" height="{r.h:g}" rx="8" fill="{it.fill or "#FFFFFF"}" stroke="{it.stroke or "#9AA5AE"}" stroke-width="2"{dash}/>')
+        lines = textwrap.wrap(it.label, 22)[:2]
+        base = r.y + (r.h / 2 - (len(lines) - 1) * 7 + 4 - (8 if it.note else 0))
+        for i, line in enumerate(lines):
+            out.append(f'<text x="{r.x + r.w / 2:g}" y="{base + i * 14:g}" text-anchor="middle" font-size="12" fill="#232F3E">{escape(line)}</text>')
+        if it.note:
+            out.append(f'<text x="{r.x + r.w / 2:g}" y="{r.y + r.h - 12:g}" text-anchor="middle" font-size="10" fill="#687078">{escape(it.note[:46])}</text>')
+    out.append("</svg>")
+    return "".join(out)

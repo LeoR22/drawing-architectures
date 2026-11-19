@@ -22,7 +22,7 @@ from awsdraw.adapters.llm_anthropic import AnthropicPlanner  # noqa: E402
 from awsdraw.adapters.llm_github import GithubModelsPlanner  # noqa: E402
 from awsdraw.adapters.vscode_opener import VsCodeOpener  # noqa: E402
 from awsdraw.application.use_cases import CollectRequirements, GenerateDiagram, PlanAndGenerate  # noqa: E402
-from awsdraw.domain import capabilities, catalog, layout, overview, system_design  # noqa: E402
+from awsdraw.domain import agents, agents_layout, capabilities, catalog, layout, overview, system_design  # noqa: E402
 from awsdraw.domain.errors import SpecError  # noqa: E402
 from awsdraw.domain.models import Architecture, Component, Flow, Requirements  # noqa: E402
 from awsdraw.domain.planner import RulePlanner  # noqa: E402
@@ -98,6 +98,54 @@ class SystemDesignTests(unittest.TestCase):
         for f in arch.flows:
             if layout.skips_over(lay.nodes, f.source, f.target):
                 self.assertGreaterEqual(rows[f.target][0] - rows[f.source][0], 2)
+
+
+class AgentProfileTests(unittest.TestCase):
+    TEXT = "Un agente de soporte con MCP que consulta documentos (RAG) y un sitio web"
+
+    def setUp(self):
+        self.arch = RulePlanner().plan(Requirements(self.TEXT, ()))
+
+    def test_planner_detects_agents_and_general_stays_general(self):
+        self.assertEqual(self.arch.profile, "agents")
+        self.assertTrue(agents.is_agentic(self.arch))
+        self.assertFalse(agents.is_agentic(RulePlanner().plan(Requirements("Tienda web con pagos", ()))))
+
+    def test_classification_covers_zones(self):
+        zones = agents.classify(self.arch).zones
+        for role in ("agent", "model", "memory_short", "memory_long", "tool_service"):
+            self.assertTrue(zones[role], role)
+
+    def test_every_component_lands_in_exactly_one_zone(self):
+        zones = agents.classify(self.arch).zones
+        placed = [c.id for cs in zones.values() for c in cs]
+        self.assertEqual(sorted(placed), sorted(c.id for c in self.arch.components))
+
+    def test_agent_inferred_when_not_declared(self):
+        arch = Architecture("x", (Component("u", "users"), Component("c", "lambda"), Component("m", "bedrock")), (Flow("c", "m"),), profile="agents")
+        self.assertEqual([c.id for c in agents.classify(arch).zones["agent"]], ["c"])
+
+    def test_layout_has_no_overlapping_items_and_page_one_is_agentic(self):
+        lay = agents_layout.compute(agents.classify(self.arch))
+        rs = [i.rect for i in lay.items]
+        for i, a in enumerate(rs):
+            for b in rs[i + 1:]:
+                self.assertFalse(a.x < b.x + b.w and b.x < a.x + a.w and a.y < b.y + b.h and b.y < a.y + a.h)
+        xml = DrawioRenderer().render(self.arch, layout.compute(self.arch))
+        first = ET.fromstring(xml).find("diagram")
+        self.assertIn("agentes", first.get("name") + ET.tostring(first, encoding="unicode"))
+        self.assertIn("Entorno de ejecución del agente", xml)
+
+    def test_agent_page_is_vendor_neutral(self):
+        lay = agents_layout.compute(agents.classify(self.arch))
+        text = " ".join(i.label + i.note for i in lay.items).lower()
+        for word in ("bedrock", "lambda", "dynamodb", "opensearch", "fargate"):
+            self.assertNotIn(word, text)
+
+    def test_json_spec_roundtrip_role_and_profile(self):
+        spec = {"title": "t", "profile": "agents", "components": [{"id": "a", "service": "lambda", "role": "agent"}], "flows": []}
+        arch = json_spec.parse(spec)
+        self.assertEqual((arch.profile, arch.components[0].role), ("agents", "agent"))
 
 
 class RuleTests(unittest.TestCase):

@@ -14,6 +14,7 @@ class Component:
     label: str = ""
     tier: str | None = None  # None -> the catalog default for the service
     vpc: bool = False
+    role: str | None = None  # optional agent-profile role, see domain/agents.py
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,7 @@ class Architecture:
     flows: tuple[Flow, ...]
     region: str = "us-east-1"
     multi_az: bool = False
+    profile: str | None = None  # None (general) or "agents"
 
 
 @dataclass(frozen=True)
