@@ -1,0 +1,23 @@
+{
+  "title": "Containerized three-tier app",
+  "multi_az": true,
+  "components": [
+    {"id": "users", "service": "users"},
+    {"id": "waf", "service": "waf"},
+    {"id": "lb", "service": "alb", "label": "Load balancer"},
+    {"id": "svc", "service": "fargate", "label": "API containers", "vpc": true},
+    {"id": "cache", "service": "elasticache", "vpc": true},
+    {"id": "db", "service": "aurora", "label": "Aurora (SQL)", "vpc": true},
+    {"id": "files", "service": "s3", "label": "Uploads (S3)"},
+    {"id": "kms", "service": "kms"},
+    {"id": "logs", "service": "cloudwatch"}
+  ],
+  "flows": [
+    {"from": "users", "to": "waf", "label": "HTTPS"},
+    {"from": "waf", "to": "lb"},
+    {"from": "lb", "to": "svc"},
+    {"from": "svc", "to": "cache", "label": "cache"},
+    {"from": "svc", "to": "db", "label": "SQL"},
+    {"from": "svc", "to": "files", "label": "objects"}
+  ]
+}

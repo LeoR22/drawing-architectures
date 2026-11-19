@@ -1,0 +1,21 @@
+{
+  "title": "Serverless web app with login",
+  "components": [
+    {"id": "users", "service": "users", "label": "Users"},
+    {"id": "cdn", "service": "cloudfront", "label": "CloudFront"},
+    {"id": "site", "service": "s3", "label": "Static site (S3)"},
+    {"id": "api", "service": "api_gateway", "label": "API Gateway"},
+    {"id": "auth", "service": "cognito", "label": "Cognito"},
+    {"id": "fn", "service": "lambda", "label": "Business logic"},
+    {"id": "db", "service": "dynamodb", "label": "DynamoDB"},
+    {"id": "logs", "service": "cloudwatch", "label": "CloudWatch"}
+  ],
+  "flows": [
+    {"from": "users", "to": "cdn", "label": "HTTPS"},
+    {"from": "cdn", "to": "site", "label": "static assets"},
+    {"from": "cdn", "to": "api", "label": "/api"},
+    {"from": "api", "to": "auth", "label": "authorize"},
+    {"from": "api", "to": "fn"},
+    {"from": "fn", "to": "db", "label": "read/write"}
+  ]
+}

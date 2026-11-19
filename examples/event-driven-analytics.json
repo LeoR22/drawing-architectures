@@ -1,0 +1,25 @@
+{
+  "title": "Event-driven ingestion and analytics",
+  "components": [
+    {"id": "src", "service": "client", "label": "Producers"},
+    {"id": "api", "service": "api_gateway"},
+    {"id": "bus", "service": "eventbridge"},
+    {"id": "q", "service": "sqs", "label": "Ingest queue"},
+    {"id": "fn", "service": "lambda", "label": "Processor"},
+    {"id": "lake", "service": "s3", "label": "Data lake (S3)"},
+    {"id": "etl", "service": "glue"},
+    {"id": "sql", "service": "athena"},
+    {"id": "bi", "service": "quicksight"},
+    {"id": "logs", "service": "cloudwatch"}
+  ],
+  "flows": [
+    {"from": "src", "to": "api", "label": "HTTPS"},
+    {"from": "api", "to": "bus", "label": "events"},
+    {"from": "bus", "to": "q", "async": true},
+    {"from": "q", "to": "fn", "async": true},
+    {"from": "fn", "to": "lake", "label": "raw data"},
+    {"from": "lake", "to": "etl"},
+    {"from": "etl", "to": "sql"},
+    {"from": "sql", "to": "bi", "label": "dashboards"}
+  ]
+}
