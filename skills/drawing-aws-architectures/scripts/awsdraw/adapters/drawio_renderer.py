@@ -11,7 +11,7 @@ from __future__ import annotations
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
 
-from ..domain import agents, agents_layout, capabilities, overview as overview_mod, overview_layout as ovl, system_design
+from ..domain import agents, agents_layout, c4, capabilities, overview as overview_mod, overview_layout as ovl, system_design
 from ..domain.layout import Layout, Rect, skips_over
 from ..domain.models import Architecture
 
@@ -112,6 +112,8 @@ class DrawioRenderer:
         self._overview_page(mxfile, ov, ovl.compute(ov), arch.title)
         self._services_page(mxfile, arch, layout)
         self._technical_page(mxfile, arch, layout)
+        self._c4_page(mxfile, "level-5", "5 · C4 Contexto", c4.context(arch), "Quién usa la solución y de qué sistemas externos depende.")
+        self._c4_page(mxfile, "level-6", "6 · C4 Contenedores", c4.containers(arch, layout), "Las piezas ejecutables dentro de la solución y la tecnología de cada una.")
         ET.indent(mxfile)
         return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(mxfile, encoding="unicode") + "\n"
 
@@ -188,6 +190,25 @@ class DrawioRenderer:
         lines = "".join(f"<p style=\"margin:4px 0\">{escape(line)}</p>" for line in ov.story)
         story = f"<b>Cómo explicarlo, paso a paso</b>{lines}"
         _geo(_cell(root, "story", story, "text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=13;fontColor=#232F3E;fillColor=#FAFAFA;strokeColor=#D5DBDB;spacing=10;"), *_xywh(lay.story))
+
+    # ---- C4 model (levels 1 and 2) -------------------------------------------------------
+    def _c4_page(self, mxfile, page_id, name, view, subtitle):
+        root = _page(mxfile, page_id, name, view.width, view.height)
+        _heading(root, view.title, subtitle, 30, 14)
+        if view.boundary:
+            title, r = view.boundary
+            _geo(_cell(root, "c4_boundary", f"<b>{escape(title)}</b><br>[Límite del sistema]", "rounded=1;arcSize=2;html=1;dashed=1;dashPattern=8 6;fillColor=none;strokeColor=#444444;strokeWidth=2;verticalAlign=top;align=left;spacingLeft=12;spacingTop=4;fontSize=12;fontColor=#444444;"), r.x, r.y, r.w, r.h)
+        label_of = {c4.PERSON: "Persona", c4.SYSTEM: "Sistema de software", c4.EXTERNAL: "Sistema externo", c4.CONTAINER: "Contenedor", c4.DATABASE: "Contenedor"}
+        for b in view.boxes:
+            fill, stroke = c4.COLORS[b.type]
+            tech = f", {b.tech}" if b.tech else ""
+            value = f"<b>{escape(b.name)}</b><br><font style='font-size:10px'>[{label_of[b.type]}{escape(tech)}]</font>" + (f"<br><br><font style='font-size:10px'>{escape(b.desc)}</font>" if b.desc else "")
+            shape = "shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=12;" if b.type == c4.DATABASE else "rounded=1;arcSize=8;"
+            _geo(_cell(root, b.id, value, f"{shape}html=1;whiteSpace=wrap;fontSize=12;fontColor=#FFFFFF;fillColor={fill};strokeColor={stroke};"), b.rect.x, b.rect.y, b.rect.w, b.rect.h)
+        modes = {"right": (True, None, False), "down": (False, True, False), "up": (False, False, False), "left": (False, None, False), "over": (False, None, True)}
+        for i, rel in enumerate(view.rels, 1):
+            forward, down, over = modes[rel.mode]
+            _edge(root, f"c4edge{i}", rel.source, rel.target, rel.label, "dashed=1;" if rel.async_ else "", forward, down, over=over)
 
     # ---- level 3 -------------------------------------------------------------------------
     def _services_page(self, mxfile, arch, layout):

@@ -212,3 +212,55 @@ def render_agents(arch: Architecture) -> str:
             out.append(f'<text x="{r.x + r.w / 2:g}" y="{r.y + r.h - 12:g}" text-anchor="middle" font-size="10" fill="#687078">{escape(it.note[:46])}</text>')
     out.append("</svg>")
     return "".join(out)
+
+
+def render_c4(view) -> str:
+    from ..domain import c4
+
+    out = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {view.width:g} {view.height:g}" font-family="Arial,sans-serif">',
+        '<defs><marker id="c" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#444"/></marker></defs>',
+        f'<text x="30" y="30" font-size="17" font-weight="bold" fill="#232F3E">{escape(view.title[:80])}</text>',
+    ]
+    if view.boundary:
+        t, r = view.boundary
+        out.append(f'<rect x="{r.x:g}" y="{r.y:g}" width="{r.w:g}" height="{r.h:g}" rx="6" fill="none" stroke="#444" stroke-width="2" stroke-dasharray="8 6"/>')
+        out.append(f'<text x="{r.x + 12:g}" y="{r.y + 20:g}" font-size="12" font-weight="bold" fill="#444">{escape(t[:50])}</text><text x="{r.x + 12:g}" y="{r.y + 34:g}" font-size="10" fill="#444">[Límite del sistema]</text>')
+    rects = {b.id: b.rect for b in view.boxes}
+    for rel in view.rels:
+        a, b = rects[rel.source], rects[rel.target]
+        dash = ' stroke-dasharray="6 4"' if rel.async_ else ""
+        if rel.mode == "over":
+            top = min(a.y, b.y) - 26
+            d = f"M{a.x + a.w / 2:g},{a.y:g} V{top:g} H{b.x + b.w / 2:g} V{b.y:g}"
+            lx, ly = (a.x + b.x + a.w) / 2, top - 4
+        else:
+            if rel.mode == "right":
+                p1, p2 = (a.x + a.w, a.y + a.h / 2), (b.x, b.y + b.h / 2)
+            elif rel.mode == "left":
+                p1, p2 = (a.x, a.y + a.h / 2), (b.x + b.w, b.y + b.h / 2)
+            elif rel.mode == "down":
+                p1, p2 = (a.x + a.w / 2, a.y + a.h), (b.x + b.w / 2, b.y)
+            else:
+                p1, p2 = (a.x + a.w / 2, a.y), (b.x + b.w / 2, b.y + b.h)
+            d = f"M{p1[0]:g},{p1[1]:g} L{p2[0]:g},{p2[1]:g}"
+            lx, ly = (p1[0] + p2[0]) / 2 + 4, (p1[1] + p2[1]) / 2 - 4
+        out.append(f'<path d="{d}" fill="none" stroke="#444" stroke-width="2"{dash} marker-end="url(#c)"/>')
+        if rel.label:
+            out.append(f'<text x="{lx:g}" y="{ly:g}" text-anchor="middle" font-size="11" fill="#444" stroke="#fff" stroke-width="4" paint-order="stroke">{escape(rel.label[:28])}</text>')
+    kind = {c4.PERSON: "Persona", c4.SYSTEM: "Sistema de software", c4.EXTERNAL: "Sistema externo", c4.CONTAINER: "Contenedor", c4.DATABASE: "Contenedor"}
+    for b in view.boxes:
+        fill, stroke = c4.COLORS[b.type]
+        r = b.rect
+        out.append(f'<rect x="{r.x:g}" y="{r.y:g}" width="{r.w:g}" height="{r.h:g}" rx="8" fill="{fill}" stroke="{stroke}" stroke-width="2"/>')
+        lines = textwrap.wrap(b.name, 24)[:2]
+        y = r.y + 26
+        for ln in lines:
+            out.append(f'<text x="{r.x + r.w / 2:g}" y="{y:g}" text-anchor="middle" font-size="13" font-weight="bold" fill="#fff">{escape(ln)}</text>')
+            y += 16
+        tag = f"[{kind[b.type]}" + (f", {b.tech}" if b.tech else "") + "]"
+        out.append(f'<text x="{r.x + r.w / 2:g}" y="{y + 2:g}" text-anchor="middle" font-size="10" fill="#fff">{escape(tag[:34])}</text>')
+        if b.desc:
+            out.append(f'<text x="{r.x + r.w / 2:g}" y="{y + 20:g}" text-anchor="middle" font-size="10" fill="#E6EEF7">{escape(textwrap.shorten(b.desc, 34))}</text>')
+    out.append("</svg>")
+    return "".join(out)

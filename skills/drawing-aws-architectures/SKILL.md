@@ -5,7 +5,7 @@ description: Produces a fast, high-level AWS architecture as an editable draw.io
 
 # Drawing AWS architectures (draw.io, VS Code)
 
-Goal: requirements in, a `.drawio` file with official AWS icons out, in **1-3 minutes total**. The file has **4 tabs**, general to specific: *1 · System design* (vendor-neutral blocks, no service names; agent reference layout when the solution is agentic: set `"profile": "agents"` and optional per-component `"role"`, see README), *2 · Visión general* (four plain-language blocks and a numbered story to explain it aloud), *3 · Servicios AWS* (icons with their plain role) and *4 · Detalle técnico* (Cloud/Region/VPC). High level only: 6-14 components, no ADRs, no cost models, no deep resilience analysis. For deep design reviews use `designing-cloud-architectures` instead.
+Goal: requirements in, a `.drawio` file with official AWS icons out, in **1-3 minutes total**. The file has **6 tabs**, general to specific: *1 · System design* (vendor-neutral blocks, no service names; agent reference layout when the solution is agentic: set `"profile": "agents"` and optional per-component `"role"`, see README), *2 · Visión general* (four plain-language blocks and a numbered story to explain it aloud), *3 · Servicios AWS* (icons with their plain role) *4 · Detalle técnico* (Cloud/Region/VPC), and the C4 model: *5 · C4 Contexto* (people, the system, external systems) and *6 · C4 Contenedores* (containers inside the system boundary, with technology). High level only: 6-14 components, no ADRs, no cost models, no deep resilience analysis. For deep design reviews use `designing-cloud-architectures` instead.
 
 ## Fast workflow (budget: 1-3 minutes)
 

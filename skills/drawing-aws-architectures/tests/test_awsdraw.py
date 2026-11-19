@@ -22,7 +22,7 @@ from awsdraw.adapters.llm_anthropic import AnthropicPlanner  # noqa: E402
 from awsdraw.adapters.llm_github import GithubModelsPlanner  # noqa: E402
 from awsdraw.adapters.vscode_opener import VsCodeOpener  # noqa: E402
 from awsdraw.application.use_cases import CollectRequirements, GenerateDiagram, PlanAndGenerate  # noqa: E402
-from awsdraw.domain import agents, agents_layout, capabilities, catalog, layout, overview, system_design  # noqa: E402
+from awsdraw.domain import agents, agents_layout, c4, capabilities, catalog, layout, overview, system_design  # noqa: E402
 from awsdraw.domain.errors import SpecError  # noqa: E402
 from awsdraw.domain.models import Architecture, Component, Flow, Requirements  # noqa: E402
 from awsdraw.domain.planner import RulePlanner  # noqa: E402
@@ -148,6 +148,40 @@ class AgentProfileTests(unittest.TestCase):
         self.assertEqual((arch.profile, arch.components[0].role), ("agents", "agent"))
 
 
+class C4Tests(unittest.TestCase):
+    def setUp(self):
+        self.arch = RulePlanner().plan(Requirements("Tienda web con login, notificaciones por correo y cola de tareas", ()))
+        self.lay = layout.compute(self.arch)
+
+    def test_context_has_person_system_and_external(self):
+        v = c4.context(self.arch)
+        types = [b.type for b in v.boxes]
+        self.assertIn(c4.PERSON, types)
+        self.assertEqual(types.count(c4.SYSTEM), 1)
+        self.assertIn(c4.EXTERNAL, types)
+        ids = {b.id for b in v.boxes}
+        self.assertTrue(all(r.source in ids and r.target in ids for r in v.rels))
+
+    def test_containers_inside_boundary_and_no_support(self):
+        v = c4.containers(self.arch, self.lay)
+        self.assertNotIn("monitor", {b.id for b in v.boxes})
+        _, r = v.boundary
+        for b in v.boxes:
+            if b.type != c4.PERSON:
+                self.assertTrue(r.x <= b.rect.x and b.rect.x + b.rect.w <= r.x + r.w and r.y <= b.rect.y and b.rect.y + b.rect.h <= r.y + r.h)
+        ids = {b.id for b in v.boxes}
+        self.assertTrue(all(rel.source in ids and rel.target in ids for rel in v.rels))
+
+    def test_drawio_has_six_tabs_with_c4_last(self):
+        names = [d.get("name") for d in ET.fromstring(DrawioRenderer().render(self.arch, self.lay)).findall("diagram")]
+        self.assertEqual(len(names), 6)
+        self.assertTrue(names[4].startswith("5 · C4") and names[5].startswith("6 · C4"))
+
+    def test_svg_previews(self):
+        for v in (c4.context(self.arch), c4.containers(self.arch, self.lay)):
+            ET.fromstring(svg_preview.render_c4(v))
+
+
 class RuleTests(unittest.TestCase):
     def base(self, **kw):
         return Architecture("t", (Component("a", "users"), Component("b", "lambda")), (Flow("a", "b"),), **kw)
@@ -231,7 +265,7 @@ class RendererTests(unittest.TestCase):
         for name, res in self.render_all():
             root = ET.fromstring(res.xml.split("?>", 1)[1])
             pages = list(root.iter("diagram"))
-            self.assertEqual([d.get("name")[:1] for d in pages], ["1", "2", "3", "4"], name)
+            self.assertEqual([d.get("name")[:1] for d in pages], ["1", "2", "3", "4", "5", "6"], name)
             for page in pages:
                 cells = list(page.iter("mxCell"))
                 ids = [c.get("id") for c in cells]

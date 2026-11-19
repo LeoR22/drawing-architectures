@@ -219,7 +219,7 @@ Cada entrada apunta a un ícono de la biblioteca **oficial** `Sidebar-AWS4.js` d
 
 ## 8. Los 4 niveles del diagrama
 
-El archivo `.drawio` trae **cuatro pestañas**, de lo más general a lo más técnico. La idea: entender primero el entorno de la solución, sin nombres de servicios, y bajar de nivel solo cuando haga falta.
+El archivo `.drawio` trae **seis pestañas**: cuatro niveles de lo más general a lo más técnico, más el **modelo C4** (pestañas 5 y 6: *Contexto* con personas, sistema y sistemas externos; y *Contenedores* con las piezas dentro del límite del sistema y su tecnología). También salen en la interfaz con descarga PNG/SVG. La idea: entender primero el entorno de la solución, sin nombres de servicios, y bajar de nivel solo cuando haga falta.
 
 | Nivel | Pestaña | Para quién | Qué muestra |
 |---|---|---|---|

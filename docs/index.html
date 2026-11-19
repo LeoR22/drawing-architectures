@@ -11,7 +11,7 @@ textarea{width:100%;min-height:140px;box-sizing:border-box;font:inherit;padding:
 button{background:var(--o);color:#fff;border:0;border-radius:6px;padding:10px 18px;font-size:15px;cursor:pointer}
 button.alt{background:var(--b)}button:disabled{opacity:.5;cursor:wait}
 .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:10px}
-#preview svg,#overview svg,#system svg{width:100%;height:auto;background:#fff;border:1px solid #ddd;border-radius:6px}
+#preview svg,#overview svg,#system svg,#c4a svg,#c4b svg{width:100%;height:auto;background:#fff;border:1px solid #ddd;border-radius:6px}
 .note{color:#555;font-size:13px}.err{color:#b00020;font-weight:600}.warn{color:#8a5a00}
 ul{margin:6px 0 0 18px;padding:0}
 </style></head><body>
@@ -33,7 +33,7 @@ ul{margin:6px 0 0 18px;padding:0}
 <div class="row"><b id="ttl"></b><span class="note" id="meta"></span></div>
 <h3 style="margin:10px 0 4px">Nivel 1 · System design (sin nombres de servicios)</h3><div id="system"></div><div class="row imgs" data-k="system"><button class="alt" data-f="png">Descargar PNG</button><button class="alt" data-f="svg">Descargar SVG</button></div>
 <h3 style="margin:14px 0 4px">Nivel 2 · Visión general (para explicarlo)</h3><div id="overview"></div><div class="row imgs" data-k="overview"><button class="alt" data-f="png">Descargar PNG</button><button class="alt" data-f="svg">Descargar SVG</button></div>
-<details><summary>Niveles 3 y 4 · vista previa técnica</summary><div id="preview"></div><div class="row imgs" data-k="preview"><button class="alt" data-f="png">Descargar PNG</button><button class="alt" data-f="svg">Descargar SVG</button></div><p class="note">Vista previa simplificada. El archivo <code>.drawio</code> trae los 4 niveles como pestañas, con los íconos oficiales de AWS.</p></details>
+<h3 style="margin:14px 0 4px">C4 · Nivel 1 · Contexto del sistema</h3><div id="c4a"></div><div class="row imgs" data-k="c4a"><button class="alt" data-f="png">Descargar PNG</button><button class="alt" data-f="svg">Descargar SVG</button></div><h3 style="margin:14px 0 4px">C4 · Nivel 2 · Contenedores</h3><div id="c4b"></div><div class="row imgs" data-k="c4b"><button class="alt" data-f="png">Descargar PNG</button><button class="alt" data-f="svg">Descargar SVG</button></div><details><summary>Niveles 3 y 4 · vista previa técnica</summary><div id="preview"></div><div class="row imgs" data-k="preview"><button class="alt" data-f="png">Descargar PNG</button><button class="alt" data-f="svg">Descargar SVG</button></div><p class="note">Vista previa simplificada. El archivo <code>.drawio</code> trae los 4 niveles como pestañas, con los íconos oficiales de AWS.</p></details>
 <div class="row"><button id="dl" class="alt">Descargar .drawio</button><button id="dlall" class="alt">Descargar todas las imágenes (PNG)</button><button id="sv">Guardar y abrir en VS Code</button><span id="sres" class="note"></span></div>
 <div id="warns"></div>
 <details><summary>Componentes (lista)</summary><ul id="comps"></ul></details>
@@ -127,7 +127,7 @@ $('go').onclick=async()=>{
   const j=await engine.generate($('t').value,$('m').value,[...$('f').files]);
   last=j;$('out').hidden=false;$('ttl').textContent=j.title;
   $('meta').textContent=`${j.components.length} componentes · planner: ${j.planner} · ${((performance.now()-t0)/1000).toFixed(1)} s`;
-  $('system').innerHTML=j.system_svg;$('overview').innerHTML=j.overview_svg;$('preview').innerHTML=j.svg;$('sres').textContent='';
+  $('system').innerHTML=j.system_svg;$('overview').innerHTML=j.overview_svg;$('preview').innerHTML=j.svg;$('c4a').innerHTML=j.c4_context_svg;$('c4b').innerHTML=j.c4_containers_svg;$('sres').textContent='';
   $('warns').innerHTML=j.warnings.map(w=>`<p class="warn">⚠ ${esc(w)}</p>`).join('');
   $('comps').innerHTML=j.components.map(c=>`<li><b>${esc(c.label)}</b> <span class="note">(${esc(c.service)})</span></li>`).join('');
  }catch(e){$('msg').innerHTML=`<span class="err">${esc(e.message)}</span>`}
@@ -135,7 +135,7 @@ $('go').onclick=async()=>{
 $('dl').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([last.xml],{type:'application/xml'}));a.download=last.filename;a.click()};
 $('sv').onclick=async()=>{try{const j=await engine.save(last);$('sres').textContent=(j.opened?'Abierto en VS Code: ':'Guardado (no se encontró el comando "code"): ')+j.path}catch(e){$('sres').innerHTML=`<span class="err">${esc(e.message)}</span>`}};
 
-const IMGS={system:['system_svg','nivel-1-system-design'],overview:['overview_svg','nivel-2-vision-general'],preview:['svg','nivel-3-4-tecnico']};
+const IMGS={system:['system_svg','nivel-1-system-design'],overview:['overview_svg','nivel-2-vision-general'],preview:['svg','nivel-3-4-tecnico'],c4a:['c4_context_svg','c4-nivel-1-contexto'],c4b:['c4_containers_svg','c4-nivel-2-contenedores']};
 const saveBlob=(blob,name)=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)};
 const svgToPng=svg=>new Promise((ok,ko)=>{const m=svg.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/);const w=+m[1],h=+m[2],k=2;
  const img=new Image();img.onload=()=>{const c=document.createElement('canvas');c.width=w*k;c.height=h*k;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);c.toBlob(b=>b?ok(b):ko(new Error('No se pudo crear el PNG')),'image/png')};
